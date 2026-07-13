@@ -177,3 +177,107 @@ font-weight:bold;
 .btn:hover{
 background:#ffd700;
 }
+body{
+margin:0;
+font-family:Arial,sans-serif;
+background:#f5f7fb;
+}
+
+.topbar{
+background:#081b38;
+padding:15px 8%;
+display:flex;
+justify-content:space-between;
+align-items:center;
+flex-wrap:wrap;
+}
+
+.logo-box{
+display:flex;
+align-items:center;
+gap:15px;
+color:white;
+}
+
+.logo{
+width:70px;
+}
+
+nav{
+display:flex;
+gap:20px;
+flex-wrap:wrap;
+}
+
+nav a{
+text-decoration:none;
+color:white;
+font-weight:bold;
+}
+
+nav a:hover{
+color:#00d4ff;
+}
+
+.hero{
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:70px 8%;
+background:linear-gradient(135deg,#081b38,#113d75);
+color:white;
+flex-wrap:wrap;
+}
+
+.hero-text{
+max-width:520px;
+}
+
+.hero-text h2{
+font-size:48px;
+}
+
+.hero-text p{
+font-size:20px;
+line-height:1.8;
+margin:20px 0;
+}
+
+.hero-image img{
+width:500px;
+max-width:100%;
+}
+
+.btn{
+padding:15px 30px;
+background:#00c8ff;
+color:white;
+border-radius:40px;
+text-decoration:none;
+display:inline-block;
+margin:8px;
+}
+
+.purple{
+background:#7a2cff;
+}
+
+@media(max-width:768px){
+
+.hero{
+text-align:center;
+}
+
+.hero-text h2{
+font-size:34px;
+}
+
+.topbar{
+justify-content:center;
+}
+
+nav{
+justify-content:center;
+}
+
+}
