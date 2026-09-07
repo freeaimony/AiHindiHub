@@ -173,11 +173,44 @@ jobs:
                   "store": False,
                   "generation_config": {
                       "max_output_tokens": 5000
+                  },
+                  "response_format": {
+                      "type": "text",
+                      "mime_type": "application/json",
+                      "schema": {
+                          "type": "object",
+                          "properties": {
+                              "title": {
+                                  "type": "string"
+                              },
+                              "description": {
+                                  "type": "string"
+                              },
+                              "slug": {
+                                  "type": "string"
+                              },
+                              "keywords": {
+                                  "type": "string"
+                              },
+                              "html": {
+                                  "type": "string"
+                              }
+                          },
+                          "required": [
+                              "title",
+                              "description",
+                              "slug",
+                              "keywords",
+                              "html"
+                          ],
+                          "additionalProperties": False
+                      }
                   }
               }
 
               request_data = json.dumps(
-                  payload
+                  payload,
+                  ensure_ascii=False
               ).encode("utf-8")
 
               for attempt in range(1, attempts + 1):
@@ -344,7 +377,7 @@ jobs:
 
               raise SystemExit(
                   "Gemini interaction did not complete: "
-                  + json.dumps(data)[:3000]
+                  + json.dumps(data, ensure_ascii=False)[:3000]
               )
 
 
@@ -381,68 +414,107 @@ jobs:
           output = output.strip()
 
 
-      import json
-import re
-import ast
+          # ==================================================
+          # PARSE GEMINI JSON
+          # ==================================================
 
-# ==========================================
-# 1. REMOVE MARKDOWN JSON FENCE (IMPROVED)
-# ==========================================
-# स्ट्रिंग के आगे-पीछे के खाली स्पेस को पहले ही हटा लें
-output = output.strip()
+          def parse_gemini_json(text_data):
 
-# अगर शुरुआत में ```json या ``` है, तो उसे क्लीन करें
-output = re.sub(r"^```(?:json)?\s*", "", output, flags=re.I)
-output = re.sub(r"\s*```$", "", output)
-output = output.strip()
+              if not text_data:
+                  return None
 
-# ==========================================
-# 2. PARSE JSON (FIXED & IMPROVED)
-# ==========================================
-def clean_and_load(text_data):
-    if not text_data:
-        return None
-        
-    # पहली कोशिश: सीधे लोड करें
-    try:
-        return json.loads(text_data)
-    except json.JSONDecodeError:
-        pass
+              cleaned = text_data.strip()
 
-    # दूसरी कोशिश: शब्दों के बीच वाले अन-एस्केप्ड " को \" में बदलें
-    try:
-        fixed_text = re.sub(r'(?<![:,\{\[\s])"(?![:,\}\]\s])', '\\"', text_data)
-        return json.loads(fixed_text)
-    except json.JSONDecodeError:
-        pass
+              # Normal case:
+              # structured output is already valid JSON.
+              try:
 
-    # तीसरी कोशिश: पाइथन का literal_eval इस्तेमाल करें (यह सिंगल कोट्स वाले JSON को भी फिक्स कर देता है)
-    try:
-        return ast.literal_eval(text_data)
-    except (ValueError, SyntaxError):
-        pass
-        
-    return None
-
-# पहले पूरे आउटपुट को ट्राई करें
-article = clean_and_load(output)
-
-# अगर फेल हो जाए, तो Non-Greedy तरीके से JSON ऑब्जेक्ट ढूंढें
-if not article:
-    # `\{.*?\}` (Non-greedy) का उपयोग करें ताकि सिर्फ वैलिड JSON ब्लॉक ही मिले
-    match = re.search(r"(\{.*\})", output, re.S)
-    if match:
-        article = clean_and_load(match.group(1))
-
-# अगर सब कुछ फेल हो जाए, तो फॉलबैक दें
-if not article:
-    print("Warning: Perfect JSON parsing failed. Creating fallback structure from text.")
-    article = {
-        "title": "Automated Article",
-        "content": output
-    }
-
+                  parsed = json.loads(
+                      cleaned
                   )
+
+                  if isinstance(
+                      parsed,
+                      dict
+                  ):
+                      return parsed
+
+              except json.JSONDecodeError:
+
+                  pass
+
+              # Fallback if model adds markdown JSON fence.
+              cleaned = re.sub(
+                  r"^```(?:json)?\s*",
+                  "",
+                  cleaned,
+                  flags=re.I
+              )
+
+              cleaned = re.sub(
+                  r"\s*```$",
+                  "",
+                  cleaned
+              ).strip()
+
+              try:
+
+                  parsed = json.loads(
+                      cleaned
+                  )
+
+                  if isinstance(
+                      parsed,
+                      dict
+                  ):
+                      return parsed
+
+              except json.JSONDecodeError:
+
+                  pass
+
+              # Last fallback:
+              # decode first complete JSON object.
+              decoder = json.JSONDecoder()
+
+              try:
+
+                  start_index = cleaned.find("{")
+
+                  if start_index >= 0:
+
+                      parsed, _ = decoder.raw_decode(
+                          cleaned[start_index:]
+                      )
+
+                      if isinstance(
+                          parsed,
+                          dict
+                      ):
+                          return parsed
+
+              except (
+                  json.JSONDecodeError,
+                  ValueError
+              ):
+
+                  pass
+
+              return None
+
+
+          article = parse_gemini_json(
+              output
+          )
+
+          if not article:
+
+              raise SystemExit(
+                  "Gemini returned invalid JSON even though "
+                  "structured JSON output was requested. "
+                  "Raw output starts with: "
+                  + output[:1000]
+              )
 
 
           # ==================================================
@@ -464,9 +536,7 @@ if not article:
                   raise SystemExit(
                       f"Missing field: {key}"
                   )
-
-
-          title = str(
+                    title = str(
               article["title"]
           ).strip()
 
@@ -546,7 +616,9 @@ if not article:
           )
 
 
+          # ==================================================
           # HARD LIMIT
+          # ==================================================
 
           if word_count > 1500:
 
@@ -555,7 +627,6 @@ if not article:
                   f"{word_count} words. "
                   "Maximum allowed is 1500."
               )
-
 
           if word_count < 1000:
 
@@ -595,7 +666,9 @@ if not article:
           )
 
 
-          # Prevent overwriting
+          # ==================================================
+          # PREVENT OVERWRITING
+          # ==================================================
 
           if os.path.exists(filename):
 
@@ -691,7 +764,6 @@ if not article:
                       " ",
                       article_title
                   ).strip()
-
 
                   article_title = re.sub(
                       r"\s*\|\s*AIHindiHub\s*$",
@@ -797,7 +869,6 @@ if not article:
 
                           "url":
                               SITE_BASE
-
                       },
 
                       "publisher": {
@@ -810,7 +881,6 @@ if not article:
 
                           "url":
                               SITE_BASE
-
                       },
 
                       "mainEntityOfPage": {
@@ -820,7 +890,6 @@ if not article:
 
                           "@id":
                               site_url
-
                       }
 
                   },
@@ -846,7 +915,6 @@ if not article:
 
                               "item":
                                   SITE_BASE
-
                           },
 
                           {
@@ -862,7 +930,6 @@ if not article:
 
                               "item":
                                   site_url
-
                           }
 
                       ]
@@ -1070,11 +1137,11 @@ if not article:
 
               ai_block = f"""
 
-          {marker_start}
+              {marker_start}
 
-          {new_card}
+              {new_card}
 
-          {marker_end}
+              {marker_end}
 
               """
 
@@ -1094,230 +1161,144 @@ if not article:
 
               f.write(index)
 
+         # WRITE UPDATED INDEX
+      with open(index_file, "w", encoding="utf-8") as f:
+          f.write(index_html)
 
-          # ==================================================
-          # BETTER SITEMAP
-          # ==================================================
+      # =========================
+      # BETTER SITEMAP
+      # =========================
 
-          sitemap_file = "sitemap.xml"
+      sitemap_file = "sitemap.xml"
 
+      static_pages = [
+          "index.html",
+          "about.html",
+          "aitools.html",
+          "Contact.html",
+          "privacy.html",
+          "disclaimer.html",
+          "terms.html"
+      ]
 
-          static_pages = [
+      sitemap_urls = []
 
-              "index.html",
+      # Add static pages
+      for page in static_pages:
+          page_path = os.path.join(".", page)
 
-              "about.html",
+          if os.path.exists(page_path):
+              sitemap_urls.append(
+                  SITE_URL.rstrip("/") + "/" + page
+              )
 
-              "aitools.html",
-
-              "Contact.html",
-
-              "privacy.html",
-
-              "disclaimer.html",
-
-              "terms.html"
-
+      # Add all HTML article pages
+      for root, dirs, files in os.walk("."):
+          dirs[:] = [
+              d for d in dirs
+              if d not in [
+                  ".git",
+                  ".github",
+                  "__pycache__"
+              ]
           ]
 
+          for file_name in files:
+              if not file_name.endswith(".html"):
+                  continue
 
-          sitemap_urls = []
+              full_path = os.path.join(root, file_name)
 
+              # Skip static pages already added
+              relative_path = os.path.relpath(
+                  full_path,
+                  "."
+              ).replace(os.sep, "/")
 
-          # Static pages
+              if relative_path in static_pages:
+                  continue
 
-          for f in static_pages:
-
-              if os.path.exists(f):
-
-                  if f == "index.html":
-
-                      url_for_page = SITE_BASE
-
-                  else:
-
-                      url_for_page = (
-                          SITE_BASE + f
-                      )
-
-
-                  sitemap_urls.append(
-                      (
-                          url_for_page,
-                          today
-                      )
-                  )
-
-
-          # All article pages
-
-          for f in sorted(
-              os.listdir(".")
-          ):
-
-              if (
-                  f.endswith(".html")
-                  and f not in static_pages
-              ):
-
-                  sitemap_urls.append(
-                      (
-                          SITE_BASE + f,
-                          today
-                      )
-                  )
-
-
-          # ==================================================
-          # REMOVE DUPLICATES
-          # ==================================================
-
-          seen = set()
-
-          unique_urls = []
-
-
-          for u, d in sitemap_urls:
-
-              if u not in seen:
-
-                  seen.add(u)
-
-                  unique_urls.append(
-                      (
-                          u,
-                          d
-                      )
-                  )
-
-
-          # ==================================================
-          # CREATE XML
-          # ==================================================
-
-          xml = [
-
-              '<?xml version="1.0" encoding="UTF-8"?>',
-
-              '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-
-          ]
-
-
-          for u, d in unique_urls:
-
-              xml.append(
-                  "  <url>"
+              sitemap_urls.append(
+                  SITE_URL.rstrip("/") + "/" + relative_path
               )
 
-              xml.append(
-                  f"    <loc>{html_lib.escape(u)}</loc>"
-              )
+      # Remove duplicate URLs
+      seen = set()
+      unique_urls = []
 
-              xml.append(
-                  f"    <lastmod>{d}</lastmod>"
-              )
+      for url in sitemap_urls:
+          if url not in seen:
+              seen.add(url)
+              unique_urls.append(url)
 
-              xml.append(
-                  "  </url>"
-              )
+      sitemap_urls = unique_urls
 
+      # Create sitemap XML
+      xml = [
+          '<?xml version="1.0" encoding="UTF-8"?>',
+          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+      ]
 
+      today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+      for url in sitemap_urls:
+          xml.append("  <url>")
           xml.append(
-              "</urlset>"
+              f"    <loc>{url}</loc>"
           )
-
-
-          with open(
-              sitemap_file,
-              "w",
-              encoding="utf-8"
-          ) as f:
-
-              f.write(
-                  "\n".join(xml)
-                  + "\n"
-              )
-
-
-          # ==================================================
-          # SUCCESS
-          # ==================================================
-
-          print(
-              "================================"
+          xml.append(
+              f"    <lastmod>{today}</lastmod>"
           )
+          xml.append("  </url>")
 
-          print(
-              "ARTICLE SUCCESSFULLY CREATED"
-          )
+      xml.append("</urlset>")
 
-          print(
-              "================================"
-          )
+      with open(
+          sitemap_file,
+          "w",
+          encoding="utf-8"
+      ) as f:
+          f.write("\n".join(xml))
 
-          print(
-              "Title:",
-              title
-          )
+      # =========================
+      # SUCCESS LOG
+      # =========================
 
-          print(
-              "Words:",
-              word_count
-          )
+      print("")
+      print("========================================")
+      print("       ARTICLE GENERATED SUCCESSFULLY")
+      print("========================================")
+      print("")
+      print(f"Title: {title}")
+      print(f"Words: {word_count}")
+      print(f"File: {article_file}")
+      print(f"URL: {article_url}")
+      print(f"Internal links: {len(internal_links)}")
+      print(f"Sitemap URLs: {len(sitemap_urls)}")
+      print("")
+      print("Done!")
+      print("========================================")
 
-          print(
-              "File:",
-              filename
-          )
+PY
 
-          print(
-              "URL:",
-              site_url
-          )
+    # =========================
+    # COMMIT AND PUSH
+    # =========================
 
-          print(
-              "Internal links:",
-              len(existing_articles)
-          )
+    - name: Commit and push article
+      run: |
+        git config user.name "AiHindiHub AI"
+        git config user.email \
+          "41898282+github-actions[bot]@users.noreply.github.com"
 
-          print(
-              "Sitemap URLs:",
-              len(unique_urls)
-          )
+        git add .
 
-          print(
-              "================================"
-          )
+        if git diff --cached --quiet; then
+          echo "No changes to commit."
+          exit 0
+        fi
 
+        git commit \
+          -m "AI: publish new Hindi SEO article"
 
-          PY
-
-
-      # ==================================================
-      # COMMIT AND PUSH
-      # ==================================================
-
-      - name: Commit and push article
-
-        run: |
-
-          git config user.name "AiHindiHub AI"
-
-          git config user.email \
-            "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add .
-
-          if git diff --cached --quiet; then
-
-            echo "No changes to commit."
-
-            exit 0
-
-          fi
-
-          git commit \
-            -m "AI: publish new Hindi SEO article"
-
-          git push
+        git push
