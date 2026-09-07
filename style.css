@@ -534,3 +534,262 @@ width:100%;
 }
 
   }
+
+/* =========================================
+   AIHindiHub - Responsive Article Layout
+   Mobile + Tablet + Desktop
+   ========================================= */
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    width: 100%;
+    overflow-x: hidden;
+}
+
+body {
+    width: 100%;
+    margin: 0;
+    overflow-x: hidden;
+}
+
+/* Main content */
+main.container {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* AI generated article */
+.ai-generated-article {
+    width: 100%;
+    max-width: 900px;
+    margin: 25px auto;
+    padding: 30px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+/* Article headings */
+.ai-generated-article h1 {
+    font-size: 38px;
+    line-height: 1.35;
+    margin: 0 0 25px;
+}
+
+.ai-generated-article h2 {
+    font-size: 30px;
+    line-height: 1.4;
+    margin: 30px 0 15px;
+}
+
+.ai-generated-article h3 {
+    font-size: 24px;
+    line-height: 1.45;
+    margin: 25px 0 12px;
+}
+
+/* Article text */
+.ai-generated-article p {
+    font-size: 18px;
+    line-height: 1.85;
+    margin: 0 0 20px;
+}
+
+/* Lists */
+.ai-generated-article ul,
+.ai-generated-article ol {
+    padding-left: 28px;
+    margin-bottom: 22px;
+}
+
+.ai-generated-article li {
+    font-size: 18px;
+    line-height: 1.8;
+    margin-bottom: 8px;
+}
+
+/* Images */
+.ai-generated-article img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    margin: 20px auto;
+    border-radius: 10px;
+}
+
+/* Links */
+.ai-generated-article a {
+    overflow-wrap: anywhere;
+}
+
+/* Tables */
+.ai-generated-article table {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: collapse;
+    margin: 25px 0;
+    display: block;
+    overflow-x: auto;
+}
+
+.ai-generated-article th,
+.ai-generated-article td {
+    padding: 10px;
+    border: 1px solid #ddd;
+    text-align: left;
+    white-space: normal;
+}
+
+/* Code */
+.ai-generated-article pre {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.ai-generated-article code {
+    overflow-wrap: anywhere;
+}
+
+/* Article card on homepage */
+.article-card {
+    width: 100%;
+    max-width: 900px;
+    margin: 20px auto;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* =========================================
+   TABLET
+   ========================================= */
+
+@media (max-width: 900px) {
+
+    main.container {
+        padding: 15px;
+    }
+
+    .ai-generated-article {
+        padding: 25px;
+    }
+
+    .ai-generated-article h1 {
+        font-size: 34px;
+    }
+
+    .ai-generated-article h2 {
+        font-size: 27px;
+    }
+
+    .ai-generated-article h3 {
+        font-size: 22px;
+    }
+
+    .ai-generated-article p,
+    .ai-generated-article li {
+        font-size: 17px;
+    }
+}
+
+/* =========================================
+   MOBILE
+   ========================================= */
+
+@media (max-width: 600px) {
+
+    main.container {
+        width: 100%;
+        padding: 10px;
+    }
+
+    .ai-generated-article {
+        width: 100%;
+        max-width: 100%;
+        margin: 10px 0;
+        padding: 16px;
+        border-radius: 8px;
+    }
+
+    .ai-generated-article h1 {
+        font-size: 27px;
+        line-height: 1.35;
+        margin-bottom: 18px;
+    }
+
+    .ai-generated-article h2 {
+        font-size: 23px;
+        line-height: 1.4;
+        margin-top: 25px;
+    }
+
+    .ai-generated-article h3 {
+        font-size: 20px;
+    }
+
+    .ai-generated-article p {
+        font-size: 17px;
+        line-height: 1.8;
+        margin-bottom: 18px;
+    }
+
+    .ai-generated-article li {
+        font-size: 17px;
+        line-height: 1.75;
+    }
+
+    .ai-generated-article ul,
+    .ai-generated-article ol {
+        padding-left: 22px;
+    }
+
+    .ai-generated-article img {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .ai-generated-article table {
+        font-size: 15px;
+    }
+
+    .ai-generated-article pre {
+        font-size: 14px;
+    }
+}
+
+/* =========================================
+   VERY SMALL PHONES
+   ========================================= */
+
+@media (max-width: 380px) {
+
+    main.container {
+        padding: 8px;
+    }
+
+    .ai-generated-article {
+        padding: 13px;
+    }
+
+    .ai-generated-article h1 {
+        font-size: 24px;
+    }
+
+    .ai-generated-article h2 {
+        font-size: 21px;
+    }
+
+    .ai-generated-article p,
+    .ai-generated-article li {
+        font-size: 16px;
+    }
+  }
