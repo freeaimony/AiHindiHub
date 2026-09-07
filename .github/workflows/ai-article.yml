@@ -33,36 +33,38 @@ jobs:
               raise SystemExit("GEMINI_API_KEY secret is missing.")
 
           prompt = """
-          तुम AiHindiHub नाम की Hindi AI और Technology website के लिए एक नया,
+          तुम AiHindiHub नाम की Hindi AI और Technology website के लिए एक नया
           original और useful SEO-friendly article लिख रहे हो।
 
-          आज के लिए एक नया विषय चुनो जो AI, technology, AI tools, students,
-          productivity, online work या useful apps से संबंधित हो।
+          AI, Technology, AI Tools, Students, Productivity, Online Work,
+          Useful Apps या Digital Technology से संबंधित एक नया विषय चुनो।
 
-          Article पूरी तरह Hindi में होना चाहिए, लेकिन जरूरी technical terms
-          English में रख सकते हो।
+          Article पूरी तरह Hindi में होना चाहिए।
+          जरूरी technical terms English में रख सकते हो।
 
           Article कम से कम 1200 शब्दों का हो।
 
-          महत्वपूर्ण:
-          - तथ्यात्मक और उपयोगी जानकारी दो।
-          - किसी दूसरे website का text copy मत करो।
-          - keyword stuffing मत करो।
-          - misleading claims मत करो।
-          - article को natural और human-friendly रखो।
-          - शुरुआत में strong introduction हो।
+          नियम:
+          - Original content लिखो।
+          - किसी website का text copy मत करो।
+          - Keyword stuffing मत करो।
+          - Fake या misleading claims मत करो।
+          - Human-friendly language रखो।
+          - Strong introduction दो।
           - H2 और H3 headings इस्तेमाल करो।
-          - practical examples और tips दो।
-          - अंत में निष्कर्ष दो।
-          - कोई Markdown मत दो।
+          - Practical examples और useful tips दो।
+          - अंत में conclusion दो।
+          - Markdown का इस्तेमाल मत करो।
           - HTML body content दो।
 
-          केवल valid JSON लौटाओ। JSON के बाहर कोई text मत लिखो।
+          केवल valid JSON लौटाओ।
+          JSON के बाहर कोई text मत लिखो।
 
           JSON format:
+
           {
             "title": "Article title",
-            "description": "SEO meta description, maximum 155 characters",
+            "description": "SEO meta description maximum 155 characters",
             "slug": "url-friendly-slug",
             "keywords": "keyword1, keyword2, keyword3",
             "html": "<article>...</article>"
@@ -92,9 +94,13 @@ jobs:
 
           try:
               with urllib.request.urlopen(request, timeout=180) as response:
-                  data = json.loads(response.read().decode("utf-8"))
+                  data = json.loads(
+                      response.read().decode("utf-8")
+                  )
           except Exception as e:
-              raise SystemExit(f"Gemini API request failed: {e}")
+              raise SystemExit(
+                  f"Gemini API request failed: {e}"
+              )
 
           if data.get("status") != "completed":
               raise SystemExit(
@@ -111,88 +117,232 @@ jobs:
                           output += item.get("text", "")
 
           if not output:
-              raise SystemExit("Gemini returned no text output.")
+              raise SystemExit(
+                  "Gemini returned no text output."
+              )
 
           output = output.strip()
 
-          # Remove accidental Markdown code fences
-          output = re.sub(r"^```json\s*", "", output, flags=re.I)
-          output = re.sub(r"^```\s*", "", output)
-          output = re.sub(r"\s*```$", "", output)
+          output = re.sub(
+              r"^```json\s*",
+              "",
+              output,
+              flags=re.I
+          )
+
+          output = re.sub(
+              r"^```\s*",
+              "",
+              output
+          )
+
+          output = re.sub(
+              r"\s*```$",
+              "",
+              output
+          )
 
           try:
               article = json.loads(output)
-          except json.JSONDecodeError:
-              # Try extracting the JSON object
-              match = re.search(r"\{.*\}", output, re.S)
-              if not match:
-                  raise SystemExit("Could not parse Gemini JSON.")
-              article = json.loads(match.group(0))
 
-          required = ["title", "description", "slug", "keywords", "html"]
+          except json.JSONDecodeError:
+              match = re.search(
+                  r"\{.*\}",
+                  output,
+                  re.S
+              )
+
+              if not match:
+                  raise SystemExit(
+                      "Could not parse Gemini JSON."
+                  )
+
+              article = json.loads(
+                  match.group(0)
+              )
+
+          required = [
+              "title",
+              "description",
+              "slug",
+              "keywords",
+              "html"
+          ]
 
           for key in required:
               if not article.get(key):
-                  raise SystemExit(f"Missing field from Gemini output: {key}")
+                  raise SystemExit(
+                      f"Missing field: {key}"
+                  )
 
-          title = str(article["title"]).strip()
-          description = str(article["description"]).strip()
-          slug = str(article["slug"]).strip().lower()
-          keywords = str(article["keywords"]).strip()
-          html = str(article["html"]).strip()
+          title = str(
+              article["title"]
+          ).strip()
 
-          # Make slug safe
-          slug = re.sub(r"[^a-z0-9-]", "-", slug)
-          slug = re.sub(r"-+", "-", slug).strip("-")
+          description = str(
+              article["description"]
+          ).strip()
+
+          slug = str(
+              article["slug"]
+          ).strip().lower()
+
+          keywords = str(
+              article["keywords"]
+          ).strip()
+
+          html = str(
+              article["html"]
+          ).strip()
+
+          slug = re.sub(
+              r"[^a-z0-9-]",
+              "-",
+              slug
+          )
+
+          slug = re.sub(
+              r"-+",
+              "-",
+              slug
+          ).strip("-")
 
           if not slug:
-              raise SystemExit("Invalid article slug.")
+              raise SystemExit(
+                  "Invalid article slug."
+              )
 
           filename = f"{slug}.html"
 
-          # Prevent accidental overwrite
           if os.path.exists(filename):
-              timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
-              filename = f"{slug}-{timestamp}.html"
+              timestamp = datetime.now(
+                  timezone.utc
+              ).strftime(
+                  "%Y%m%d%H%M"
+              )
 
-          today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+              filename = (
+                  f"{slug}-{timestamp}.html"
+              )
+
+          today = datetime.now(
+              timezone.utc
+          ).strftime("%Y-%m-%d")
+
+          # --------------------------------------------------
+          # Create article HTML
+          # --------------------------------------------------
 
           page = f"""<!DOCTYPE html>
           <html lang="hi">
+
           <head>
+
           <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+          <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0"
+          >
 
           <title>{title} | AIHindiHub</title>
 
-          <meta name="description" content="{description}">
-          <meta name="keywords" content="{keywords}">
-          <meta name="robots" content="index, follow">
+          <meta
+            name="description"
+            content="{description}"
+          >
 
-          <link rel="canonical" href="https://freeaimony.github.io/AiHindiHub/{filename}">
+          <meta
+            name="keywords"
+            content="{keywords}"
+          >
 
-          <link rel="stylesheet" href="style.css">
+          <meta
+            name="robots"
+            content="index, follow"
+          >
+
+          <link
+            rel="canonical"
+            href="https://freeaimony.github.io/AiHindiHub/{filename}"
+          >
+
+          <link
+            rel="stylesheet"
+            href="style.css"
+          >
+
           </head>
 
           <body>
 
           <header>
-            <a href="index.html">AIHindiHub</a>
+
+            <div class="container header">
+
+              <div class="logo">
+
+                <a href="index.html">
+                  <img
+                    src="logo.png"
+                    alt="AIHindiHub Logo"
+                  >
+                </a>
+
+                <h1>AIHindiHub</h1>
+
+              </div>
+
+              <nav>
+
+                <a href="index.html">Home</a>
+
+                <a href="top-10-free-ai-tools.html">
+                  AI Tools
+                </a>
+
+                <a href="google-gemini-complete-guide.html">
+                  Learn AI
+                </a>
+
+                <a href="how-to-earn-money-with-ai.html">
+                  Earn
+                </a>
+
+              </nav>
+
+            </div>
+
           </header>
 
-          <main>
+          <main class="container">
+
             {html}
+
           </main>
 
           <footer>
-            <p>© 2026 AIHindiHub</p>
+
+            <div class="container">
+
+              <p>
+                © 2026 AIHindiHub. All Rights Reserved.
+              </p>
+
+            </div>
+
           </footer>
 
           </body>
+
           </html>
           """
 
-          with open(filename, "w", encoding="utf-8") as f:
+          with open(
+              filename,
+              "w",
+              encoding="utf-8"
+          ) as f:
               f.write(page)
 
           # --------------------------------------------------
@@ -201,66 +351,119 @@ jobs:
 
           index_file = "index.html"
 
-          if os.path.exists(index_file):
-              with open(index_file, "r", encoding="utf-8") as f:
-                  index = f.read()
+          with open(
+              index_file,
+              "r",
+              encoding="utf-8"
+          ) as f:
+              index = f.read()
 
-              marker_start = "<!-- AI-AUTO-ARTICLES-START -->"
-              marker_end = "<!-- AI-AUTO-ARTICLES-END -->"
+          marker_start = (
+              "<!-- AI-AUTO-ARTICLES-START -->"
+          )
 
-              new_card = f"""
+          marker_end = (
+              "<!-- AI-AUTO-ARTICLES-END -->"
+          )
+
+          # Remove previous AI-generated article
+          old_block = (
+              re.escape(marker_start)
+              + r".*?"
+              + re.escape(marker_end)
+          )
+
+          index = re.sub(
+              old_block,
+              "",
+              index,
+              flags=re.S
+          )
+
+          # New article card
+          new_card = f"""
           {marker_start}
-          <section class="ai-auto-article">
-            <h2>नया AI Article</h2>
-            <article>
-              <h3><a href="{filename}">{title}</a></h3>
-              <p>{description}</p>
-              <a href="{filename}">पूरा Article पढ़ें →</a>
-            </article>
-          </section>
+
+          <div class="article-card ai-generated-article">
+
+            <h3>{title}</h3>
+
+            <p>{description}</p>
+
+            <a
+              href="{filename}"
+              class="read-btn"
+            >
+              Read More →
+            </a>
+
+          </div>
+
           {marker_end}
           """
 
-              pattern = re.escape(marker_start) + r".*?" + re.escape(marker_end)
+          # Find Latest Articles section
+          latest_position = index.find(
+              "<!-- Latest Articles -->"
+          )
 
-              if re.search(pattern, index, re.S):
-                  index = re.sub(
-                      pattern,
-                      new_card.strip(),
-                      index,
-                      count=1,
-                      flags=re.S
-                  )
-              elif "</main>" in index:
-                  index = index.replace(
-                      "</main>",
-                      new_card + "\n</main>",
-                      1
-                  )
-              elif "</body>" in index:
-                  index = index.replace(
-                      "</body>",
-                      new_card + "\n</body>",
-                      1
-                  )
-              else:
-                  index += "\n" + new_card
+          if latest_position == -1:
+              raise SystemExit(
+                  "Latest Articles section not found."
+              )
 
-              with open(index_file, "w", encoding="utf-8") as f:
-                  f.write(index)
+          # Find article-grid after Latest Articles
+          grid_position = index.find(
+              '<div class="article-grid">',
+              latest_position
+          )
+
+          if grid_position == -1:
+              raise SystemExit(
+                  "Latest Articles article-grid not found."
+              )
+
+          insert_position = (
+              grid_position
+              + len('<div class="article-grid">')
+          )
+
+          # Insert new article at TOP
+          index = (
+              index[:insert_position]
+              + new_card
+              + index[insert_position:]
+          )
+
+          with open(
+              index_file,
+              "w",
+              encoding="utf-8"
+          ) as f:
+              f.write(index)
 
           # --------------------------------------------------
           # Update sitemap.xml
           # --------------------------------------------------
 
           sitemap_file = "sitemap.xml"
-          site_url = f"https://freeaimony.github.io/AiHindiHub/{filename}"
+
+          site_url = (
+              "https://freeaimony.github.io/"
+              f"AiHindiHub/{filename}"
+          )
 
           if os.path.exists(sitemap_file):
-              with open(sitemap_file, "r", encoding="utf-8") as f:
+
+              with open(
+                  sitemap_file,
+                  "r",
+                  encoding="utf-8"
+              ) as f:
                   sitemap = f.read()
 
               if site_url not in sitemap:
+
                   new_url = f"""
           <url>
             <loc>{site_url}</loc>
@@ -269,27 +472,47 @@ jobs:
           """
 
                   if "</urlset>" in sitemap:
+
                       sitemap = sitemap.replace(
                           "</urlset>",
                           new_url + "\n</urlset>",
                           1
                       )
+
                   else:
                       sitemap += new_url
 
-                  with open(sitemap_file, "w", encoding="utf-8") as f:
+                  with open(
+                      sitemap_file,
+                      "w",
+                      encoding="utf-8"
+                  ) as f:
                       f.write(sitemap)
 
-          print("Article created:", filename)
-          print("Title:", title)
-          print("Description:", description)
-          print("Published URL:", site_url)
+          print(
+              "Article created:",
+              filename
+          )
+
+          print(
+              "Title:",
+              title
+          )
+
+          print(
+              "Published URL:",
+              site_url
+          )
+
           PY
 
       - name: Commit and push article
         run: |
+
           git config user.name "AiHindiHub AI"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add .
 
@@ -298,5 +521,7 @@ jobs:
             exit 0
           fi
 
-          git commit -m "AI: publish new Hindi article"
+          git commit \
+            -m "AI: publish new Hindi article"
+
           git push
