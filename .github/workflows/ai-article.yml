@@ -1,1 +1,302 @@
+name: AI Automatic Article
 
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  generate-article:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate article with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python3 <<'PY'
+          import os
+          import json
+          import re
+          import urllib.request
+          from datetime import datetime, timezone
+
+          API_KEY = os.environ.get("GEMINI_API_KEY")
+
+          if not API_KEY:
+              raise SystemExit("GEMINI_API_KEY secret is missing.")
+
+          prompt = """
+          तुम AiHindiHub नाम की Hindi AI और Technology website के लिए एक नया,
+          original और useful SEO-friendly article लिख रहे हो।
+
+          आज के लिए एक नया विषय चुनो जो AI, technology, AI tools, students,
+          productivity, online work या useful apps से संबंधित हो।
+
+          Article पूरी तरह Hindi में होना चाहिए, लेकिन जरूरी technical terms
+          English में रख सकते हो।
+
+          Article कम से कम 1200 शब्दों का हो।
+
+          महत्वपूर्ण:
+          - तथ्यात्मक और उपयोगी जानकारी दो।
+          - किसी दूसरे website का text copy मत करो।
+          - keyword stuffing मत करो।
+          - misleading claims मत करो।
+          - article को natural और human-friendly रखो।
+          - शुरुआत में strong introduction हो।
+          - H2 और H3 headings इस्तेमाल करो।
+          - practical examples और tips दो।
+          - अंत में निष्कर्ष दो।
+          - कोई Markdown मत दो।
+          - HTML body content दो।
+
+          केवल valid JSON लौटाओ। JSON के बाहर कोई text मत लिखो।
+
+          JSON format:
+          {
+            "title": "Article title",
+            "description": "SEO meta description, maximum 155 characters",
+            "slug": "url-friendly-slug",
+            "keywords": "keyword1, keyword2, keyword3",
+            "html": "<article>...</article>"
+          }
+          """
+
+          url = "https://generativelanguage.googleapis.com/v1beta/interactions"
+
+          payload = {
+              "model": "gemini-3.7-flash",
+              "input": prompt,
+              "store": False,
+              "generation_config": {
+                  "max_output_tokens": 5000
+              }
+          }
+
+          request = urllib.request.Request(
+              url,
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "x-goog-api-key": API_KEY,
+                  "Content-Type": "application/json"
+              },
+              method="POST"
+          )
+
+          try:
+              with urllib.request.urlopen(request, timeout=180) as response:
+                  data = json.loads(response.read().decode("utf-8"))
+          except Exception as e:
+              raise SystemExit(f"Gemini API request failed: {e}")
+
+          if data.get("status") != "completed":
+              raise SystemExit(
+                  "Gemini interaction did not complete: "
+                  + json.dumps(data)[:2000]
+              )
+
+          output = ""
+
+          for step in data.get("steps", []):
+              if step.get("type") == "model_output":
+                  for item in step.get("content", []):
+                      if item.get("type") == "text":
+                          output += item.get("text", "")
+
+          if not output:
+              raise SystemExit("Gemini returned no text output.")
+
+          output = output.strip()
+
+          # Remove accidental Markdown code fences
+          output = re.sub(r"^```json\s*", "", output, flags=re.I)
+          output = re.sub(r"^```\s*", "", output)
+          output = re.sub(r"\s*```$", "", output)
+
+          try:
+              article = json.loads(output)
+          except json.JSONDecodeError:
+              # Try extracting the JSON object
+              match = re.search(r"\{.*\}", output, re.S)
+              if not match:
+                  raise SystemExit("Could not parse Gemini JSON.")
+              article = json.loads(match.group(0))
+
+          required = ["title", "description", "slug", "keywords", "html"]
+
+          for key in required:
+              if not article.get(key):
+                  raise SystemExit(f"Missing field from Gemini output: {key}")
+
+          title = str(article["title"]).strip()
+          description = str(article["description"]).strip()
+          slug = str(article["slug"]).strip().lower()
+          keywords = str(article["keywords"]).strip()
+          html = str(article["html"]).strip()
+
+          # Make slug safe
+          slug = re.sub(r"[^a-z0-9-]", "-", slug)
+          slug = re.sub(r"-+", "-", slug).strip("-")
+
+          if not slug:
+              raise SystemExit("Invalid article slug.")
+
+          filename = f"{slug}.html"
+
+          # Prevent accidental overwrite
+          if os.path.exists(filename):
+              timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
+              filename = f"{slug}-{timestamp}.html"
+
+          today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+          page = f"""<!DOCTYPE html>
+          <html lang="hi">
+          <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+          <title>{title} | AIHindiHub</title>
+
+          <meta name="description" content="{description}">
+          <meta name="keywords" content="{keywords}">
+          <meta name="robots" content="index, follow">
+
+          <link rel="canonical" href="https://freeaimony.github.io/AiHindiHub/{filename}">
+
+          <link rel="stylesheet" href="style.css">
+          </head>
+
+          <body>
+
+          <header>
+            <a href="index.html">AIHindiHub</a>
+          </header>
+
+          <main>
+            {html}
+          </main>
+
+          <footer>
+            <p>© 2026 AIHindiHub</p>
+          </footer>
+
+          </body>
+          </html>
+          """
+
+          with open(filename, "w", encoding="utf-8") as f:
+              f.write(page)
+
+          # --------------------------------------------------
+          # Update index.html
+          # --------------------------------------------------
+
+          index_file = "index.html"
+
+          if os.path.exists(index_file):
+              with open(index_file, "r", encoding="utf-8") as f:
+                  index = f.read()
+
+              marker_start = "<!-- AI-AUTO-ARTICLES-START -->"
+              marker_end = "<!-- AI-AUTO-ARTICLES-END -->"
+
+              new_card = f"""
+          {marker_start}
+          <section class="ai-auto-article">
+            <h2>नया AI Article</h2>
+            <article>
+              <h3><a href="{filename}">{title}</a></h3>
+              <p>{description}</p>
+              <a href="{filename}">पूरा Article पढ़ें →</a>
+            </article>
+          </section>
+          {marker_end}
+          """
+
+              pattern = re.escape(marker_start) + r".*?" + re.escape(marker_end)
+
+              if re.search(pattern, index, re.S):
+                  index = re.sub(
+                      pattern,
+                      new_card.strip(),
+                      index,
+                      count=1,
+                      flags=re.S
+                  )
+              elif "</main>" in index:
+                  index = index.replace(
+                      "</main>",
+                      new_card + "\n</main>",
+                      1
+                  )
+              elif "</body>" in index:
+                  index = index.replace(
+                      "</body>",
+                      new_card + "\n</body>",
+                      1
+                  )
+              else:
+                  index += "\n" + new_card
+
+              with open(index_file, "w", encoding="utf-8") as f:
+                  f.write(index)
+
+          # --------------------------------------------------
+          # Update sitemap.xml
+          # --------------------------------------------------
+
+          sitemap_file = "sitemap.xml"
+          site_url = f"https://freeaimony.github.io/AiHindiHub/{filename}"
+
+          if os.path.exists(sitemap_file):
+              with open(sitemap_file, "r", encoding="utf-8") as f:
+                  sitemap = f.read()
+
+              if site_url not in sitemap:
+                  new_url = f"""
+          <url>
+            <loc>{site_url}</loc>
+            <lastmod>{today}</lastmod>
+          </url>
+          """
+
+                  if "</urlset>" in sitemap:
+                      sitemap = sitemap.replace(
+                          "</urlset>",
+                          new_url + "\n</urlset>",
+                          1
+                      )
+                  else:
+                      sitemap += new_url
+
+                  with open(sitemap_file, "w", encoding="utf-8") as f:
+                      f.write(sitemap)
+
+          print("Article created:", filename)
+          print("Title:", title)
+          print("Description:", description)
+          print("Published URL:", site_url)
+          PY
+
+      - name: Commit and push article
+        run: |
+          git config user.name "AiHindiHub AI"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add .
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "AI: publish new Hindi article"
+          git push
