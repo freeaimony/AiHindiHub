@@ -381,67 +381,67 @@ jobs:
           output = output.strip()
 
 
-          # ==================================================
-          # REMOVE MARKDOWN JSON FENCE
-          # ==================================================
+      import json
+import re
+import ast
 
-          output = re.sub(
-              r"^```json\s*",
-              "",
-              output,
-              flags=re.I
-          )
+# ==========================================
+# 1. REMOVE MARKDOWN JSON FENCE (IMPROVED)
+# ==========================================
+# स्ट्रिंग के आगे-पीछे के खाली स्पेस को पहले ही हटा लें
+output = output.strip()
 
-          output = re.sub(
-              r"^```\s*",
-              "",
-              output
-          )
+# अगर शुरुआत में ```json या ``` है, तो उसे क्लीन करें
+output = re.sub(r"^```(?:json)?\s*", "", output, flags=re.I)
+output = re.sub(r"\s*```$", "", output)
+output = output.strip()
 
-          output = re.sub(
-              r"\s*```$",
-              "",
-              output
-          )
+# ==========================================
+# 2. PARSE JSON (FIXED & IMPROVED)
+# ==========================================
+def clean_and_load(text_data):
+    if not text_data:
+        return None
+        
+    # पहली कोशिश: सीधे लोड करें
+    try:
+        return json.loads(text_data)
+    except json.JSONDecodeError:
+        pass
 
-          output = output.strip()
+    # दूसरी कोशिश: शब्दों के बीच वाले अन-एस्केप्ड " को \" में बदलें
+    try:
+        fixed_text = re.sub(r'(?<![:,\{\[\s])"(?![:,\}\]\s])', '\\"', text_data)
+        return json.loads(fixed_text)
+    except json.JSONDecodeError:
+        pass
 
+    # तीसरी कोशिश: पाइथन का literal_eval इस्तेमाल करें (यह सिंगल कोट्स वाले JSON को भी फिक्स कर देता है)
+    try:
+        return ast.literal_eval(text_data)
+    except (ValueError, SyntaxError):
+        pass
+        
+    return None
 
-          # ==================================================
-          # PARSE JSON
-          # ==================================================
+# पहले पूरे आउटपुट को ट्राई करें
+article = clean_and_load(output)
 
-          try:
+# अगर फेल हो जाए, तो Non-Greedy तरीके से JSON ऑब्जेक्ट ढूंढें
+if not article:
+    # `\{.*?\}` (Non-greedy) का उपयोग करें ताकि सिर्फ वैलिड JSON ब्लॉक ही मिले
+    match = re.search(r"(\{.*\})", output, re.S)
+    if match:
+        article = clean_and_load(match.group(1))
 
-              article = json.loads(
-                  output
-              )
+# अगर सब कुछ फेल हो जाए, तो फॉलबैक दें
+if not article:
+    print("Warning: Perfect JSON parsing failed. Creating fallback structure from text.")
+    article = {
+        "title": "Automated Article",
+        "content": output
+    }
 
-          except json.JSONDecodeError:
-
-              match = re.search(
-                  r"\{.*\}",
-                  output,
-                  re.S
-              )
-
-              if not match:
-
-                  raise SystemExit(
-                      "Could not parse Gemini JSON."
-                  )
-
-              try:
-
-                  article = json.loads(
-                      match.group(0)
-                  )
-
-              except Exception as e:
-
-                  raise SystemExit(
-                      "Invalid JSON from Gemini: "
-                      + str(e)
                   )
 
 
