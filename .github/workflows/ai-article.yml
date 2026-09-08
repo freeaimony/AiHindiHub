@@ -536,7 +536,7 @@ jobs:
                   raise SystemExit(
                       f"Missing field: {key}"
                   )
-                    title = str(
+                            title = str(
               article["title"]
           ).strip()
 
@@ -1160,8 +1160,7 @@ jobs:
           ) as f:
 
               f.write(index)
-
-         # WRITE UPDATED INDEX
+                    # WRITE UPDATED INDEX
       with open(index_file, "w", encoding="utf-8") as f:
           f.write(index_html)
 
@@ -1302,3 +1301,4 @@ PY
           -m "AI: publish new Hindi SEO article"
 
         git push
+                  
