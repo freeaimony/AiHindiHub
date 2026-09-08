@@ -333,15 +333,15 @@ jobs:
           try:
 
               data = call_gemini(
-                  "gemini-2.0-flash-exp",
+               "gemini-2.5-flash",
                   attempts=4
-              )
+            )  
 
           except Exception as first_error:
 
               print(
                   "Primary Gemini model failed."
-              )
+              )    
 
               print(
                   str(first_error)
@@ -354,10 +354,10 @@ jobs:
                       "Trying fallback Gemini model..."
                   )
 
-                  data = call_gemini(
-                      "gemini-1.5-flash",
-                      attempts=3
-                  )
+                               data = call_gemini(
+                                       "gemini-2.5-flash",
+                                                attempts=3
+                                        )
 
               except Exception as fallback_error:
 
