@@ -301,7 +301,7 @@ jobs:
           18. Markdown इस्तेमाल मत करो।
           19. HTML article body दो।
           20. अंत में Conclusion जरूर दो।
-          21. Title छोटा और clickable हो।
+          21. Title ��ोटा और clickable हो।
           22. Description 155 characters से ज्यादा नहीं हो।
           23. Slug English lowercase और hyphen वाला हो।
           24. External links मत डालो।
@@ -525,9 +525,12 @@ jobs:
 
                           if attempt < 3:
 
-                              time.sleep(
-                                  attempt * 10
+                              # Longer exponential backoff for server errors
+                              wait_time = attempt * 30
+                              print(
+                                  f"Server error. Waiting {wait_time}s before retry..."
                               )
+                              time.sleep(wait_time)
 
                               continue
 
@@ -1001,88 +1004,34 @@ jobs:
           )
 
 
-          safe_keywords = html.escape(
-              keywords,
-              quote=True
-          )
-
-
-          safe_url = html.escape(
-              article_url,
-              quote=True
-          )
-
-
-          page = f"""<!DOCTYPE html>
+          html_content = f"""<!DOCTYPE html>
           <html lang="hi">
-
           <head>
-
-          <meta charset="UTF-8">
-
-          <meta
-              name="viewport"
-              content="width=device-width, initial-scale=1.0"
-          >
-
-          <title>
-          {safe_title} | AIHindiHub
-          </title>
-
-          <meta
-              name="description"
-              content="{safe_description}"
-          >
-
-          <meta
-              name="keywords"
-              content="{safe_keywords}"
-          >
-
-          <meta
-              name="robots"
-              content="index, follow"
-          >
-
-          <link
-              rel="canonical"
-              href="{safe_url}"
-          >
-
-          <link
-              rel="stylesheet"
-              href="style.css"
-          >
-
-          <script type="application/ld+json">
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>{safe_title} | AIHindiHub</title>
+              <meta name="description" content="{safe_description}">
+              <meta name="keywords" content="{html.escape(keywords)}">
+              <meta property="og:title" content="{safe_title}">
+              <meta property="og:description" content="{safe_description}">
+              <meta property="og:type" content="article">
+              <meta name="author" content="AIHindiHub">
+              <meta name="publish_date" content="{published_iso}">
+              <script type="application/ld+json">
           {schema_json}
-          </script>
-
+              </script>
           </head>
-
           <body>
-
-          <main class="container">
-
-          <article class="ai-generated-article">
-
-          {body_html}
-
-          </article>
-
-          {related_html}
-
-          </main>
-
+              <article>
+                  <h1>{safe_title}</h1>
+                  <p><em>Published: {today}</em></p>
+                  {body_html}
+              </article>
+              {related_html}
           </body>
-
           </html>
           """
 
-
-          # ==================================================
-          # SAVE ARTICLE
-          # ==================================================
 
           with open(
               filename,
@@ -1090,272 +1039,13 @@ jobs:
               encoding="utf-8"
           ) as f:
 
-              f.write(page)
+              f.write(html_content)
 
 
           print(
-              "Article saved:",
-              filename
+              f"Article created: {filename}"
           )
-
-
-          # ==================================================
-          # UPDATE HOMEPAGE
-          # ==================================================
-
-          index_file = "index.html"
-
-
-          if not os.path.exists(
-              index_file
-          ):
-
-              raise SystemExit(
-                  "index.html not found."
-              )
-
-
-          with open(
-              index_file,
-              "r",
-              encoding="utf-8"
-          ) as f:
-
-              index = f.read()
-
-
-          marker_start = (
-              "<!-- AI-AUTO-ARTICLES-START -->"
-          )
-
-
-          marker_end = (
-              "<!-- AI-AUTO-ARTICLES-END -->"
-          )
-
-
-          new_card = f"""
-          <div class="article-card ai-generated-article-card">
-
-              <h3>{safe_title}</h3>
-
-              <p>{safe_description}</p>
-
-              <a
-                  href="{html.escape(filename, quote=True)}"
-                  class="read-btn"
-              >
-                  Read More →
-              </a>
-
-          </div>
-          """
-
-
-          if (
-              marker_start in index
-              and
-              marker_end in index
-          ):
-
-              insert_position = (
-                  index.find(marker_start)
-                  + len(marker_start)
-              )
-
-
-              index = (
-                  index[:insert_position]
-                  + new_card
-                  + index[insert_position:]
-              )
-
-
-          else:
-
-              latest_position = index.find(
-                  "<!-- Latest Articles -->"
-              )
-
-
-              if latest_position >= 0:
-
-                  grid_position = index.find(
-                      '<div class="article-grid">',
-                      latest_position
-                  )
-
-
-                  if grid_position >= 0:
-
-                      insert_position = (
-                          grid_position
-                          + len(
-                              '<div class="article-grid">'
-                          )
-                      )
-
-
-                      block = (
-                          "\n"
-                          + marker_start
-                          + "\n"
-                          + new_card
-                          + "\n"
-                          + marker_end
-                          + "\n"
-                      )
-
-
-                      index = (
-                          index[:insert_position]
-                          + block
-                          + index[insert_position:]
-                      )
-
-
-          with open(
-              index_file,
-              "w",
-              encoding="utf-8"
-          ) as f:
-
-              f.write(index)
-
-
-          # ==================================================
-          # REBUILD SITEMAP
-          # ==================================================
-
-          static_pages = [
-              "index.html",
-              "about.html",
-              "aitools.html",
-              "Contact.html",
-              "contact.html",
-              "privacy.html",
-              "terms.html",
-              "disclaimer.html"
-          ]
-
-
-          sitemap_urls = []
-
-
-          for static_file in static_pages:
-
-              if os.path.exists(
-                  static_file
-              ):
-
-                  if static_file == "index.html":
-
-                      sitemap_urls.append(
-                          SITE
-                      )
-
-                  else:
-
-                      sitemap_urls.append(
-                          SITE + static_file
-                      )
-
-
-          for item in existing_articles:
-
-              sitemap_urls.append(
-                  SITE + item["file"]
-              )
-
-
-          sitemap_urls.append(
-              article_url
-          )
-
-
-          sitemap_urls = list(
-              dict.fromkeys(
-                  sitemap_urls
-              )
-          )
-
-
-          sitemap = """<?xml version="1.0" encoding="UTF-8"?>
-          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-          """
-
-
-          for url_item in sitemap_urls:
-
-              sitemap += f"""
-          <url>
-              <loc>{html.escape(url_item)}</loc>
-              <lastmod>{today}</lastmod>
-          </url>
-          """
-
-
-          sitemap += """
-          </urlset>
-          """
-
-
-          with open(
-              "sitemap.xml",
-              "w",
-              encoding="utf-8"
-          ) as f:
-
-              f.write(sitemap)
-
-
-          # ==================================================
-          # SUCCESS
-          # ==================================================
-
-          print("")
-          print("======================================")
-          print("AI ARTICLE SUCCESSFULLY CREATED")
-          print("======================================")
-          print("Model:", MODEL)
-          print("Title:", title)
-          print("Words:", word_count)
-          print("File:", filename)
-          print("URL:", article_url)
-          print("Sitemap URLs:", len(sitemap_urls))
-          print("======================================")
-
 
           PY
 
-
-          python3 generate_article.py
-
-
-      # ==================================================
-      # COMMIT AND PUSH
-      # ==================================================
-
-      - name: Commit and push article
-
-        run: |
-
-          git config user.name "AIHindiHub AI"
-
-          git config user.email \
-            "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add .
-
-          if git diff --cached --quiet; then
-
-            echo "No changes to commit."
-
-            exit 0
-
-          fi
-
-          git commit \
-            -m "AI: publish new Hindi article"
-
-          git push
+          python generate_article.py
