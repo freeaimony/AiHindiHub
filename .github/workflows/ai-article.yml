@@ -1,4 +1,3 @@
-
 name: AI Automatic Article
 
 on:
@@ -28,7 +27,7 @@ jobs:
       # ==================================================
 
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       # ==================================================
       # GENERATE ARTICLE
@@ -158,27 +157,32 @@ jobs:
 
 
           # ==================================================
-          # GEMINI API FUNCTION
+          # GEMINI API FUNCTION (FIXED)
           # ==================================================
 
           def call_gemini(model_name, attempts=4):
 
               url = (
-                  "https://generativelanguage.googleapis.com/"
-                  "v1beta/interactions"
+                  f"https://generativelanguage.googleapis.com/"
+                  f"v1beta/models/{model_name}:generateContent"
+                  f"?key={API_KEY}"
               )
 
               payload = {
-                  "model": model_name,
-                  "input": prompt,
-                  "store": False,
-                  "generation_config": {
-                      "max_output_tokens": 5000
-                  },
-                  "response_format": {
-                      "type": "text",
-                      "mime_type": "application/json",
-                      "schema": {
+                  "contents": [
+                      {
+                          "parts": [
+                              {
+                                  "text": prompt
+                              }
+                          ]
+                      }
+                  ],
+                  "generationConfig": {
+                      "maxOutputTokens": 5000,
+                      "temperature": 1,
+                      "responseMimeType": "application/json",
+                      "responseSchema": {
                           "type": "object",
                           "properties": {
                               "title": {
@@ -203,8 +207,7 @@ jobs:
                               "slug",
                               "keywords",
                               "html"
-                          ],
-                          "additionalProperties": False
+                          ]
                       }
                   }
               }
@@ -225,7 +228,6 @@ jobs:
                       url,
                       data=request_data,
                       headers={
-                          "x-goog-api-key": API_KEY,
                           "Content-Type": "application/json"
                       },
                       method="POST"
@@ -244,9 +246,11 @@ jobs:
                               .decode("utf-8")
                           )
 
-                          return json.loads(
+                          response_data = json.loads(
                               response_text
                           )
+
+                          return response_data
 
                   except urllib.error.HTTPError as e:
 
@@ -329,7 +333,7 @@ jobs:
           try:
 
               data = call_gemini(
-                  "gemini-3.7-flash",
+                  "gemini-2.0-flash",
                   attempts=4
               )
 
@@ -351,7 +355,7 @@ jobs:
                   )
 
                   data = call_gemini(
-                      "gemini-2.5-flash",
+                      "gemini-1.5-flash",
                       attempts=3
                   )
 
@@ -364,7 +368,7 @@ jobs:
 
 
           # ==================================================
-          # CHECK RESPONSE
+          # CHECK RESPONSE (FIXED)
           # ==================================================
 
           if not data:
@@ -374,35 +378,35 @@ jobs:
               )
 
 
-          if data.get("status") != "completed":
+          # Extract text from candidates
+          candidates = data.get("candidates", [])
+
+          if not candidates:
 
               raise SystemExit(
-                  "Gemini interaction did not complete: "
-                  + json.dumps(data, ensure_ascii=False)[:3000]
+                  "Gemini returned no candidates: "
+                  + json.dumps(data, ensure_ascii=False)[:1000]
               )
 
 
-          # ==================================================
-          # EXTRACT MODEL OUTPUT
-          # ==================================================
+          first_candidate = candidates[0]
+          content = first_candidate.get("content", {})
+          parts = content.get("parts", [])
+
+          if not parts:
+
+              raise SystemExit(
+                  "Gemini returned no parts in content."
+              )
+
 
           output = ""
 
-          for step in data.get("steps", []):
+          for part in parts:
 
-              if step.get("type") == "model_output":
+              if part.get("text"):
 
-                  for item in step.get(
-                      "content",
-                      []
-                  ):
-
-                      if item.get("type") == "text":
-
-                          output += item.get(
-                              "text",
-                              ""
-                          )
+                  output += part.get("text", "")
 
 
           if not output:
@@ -537,7 +541,8 @@ jobs:
                   raise SystemExit(
                       f"Missing field: {key}"
                   )
-                            title = str(
+
+          title = str(
               article["title"]
           ).strip()
 
@@ -1000,20 +1005,15 @@ jobs:
 
           </head>
 
-
           <body>
 
-          <main class="container">
+          <article>
 
-            <article class="ai-generated-article">
+          {body_html}
 
-              {body_html}
+          </article>
 
-              {related_links}
-
-            </article>
-
-          </main>
+          {related_links}
 
           </body>
 
@@ -1021,285 +1021,46 @@ jobs:
           """
 
 
-          with open(
-              filename,
-              "w",
-              encoding="utf-8"
-          ) as f:
+          # ==================================================
+          # WRITE FILE
+          # ==================================================
 
-              f.write(page)
+          try:
+
+              with open(
+                  filename,
+                  "w",
+                  encoding="utf-8"
+              ) as f:
+
+                  f.write(page)
+
+              print(
+                  f"✅ Article saved: {filename}"
+              )
+
+          except Exception as e:
+
+              raise SystemExit(
+                  f"Failed to write file: {e}"
+              )
 
 
           # ==================================================
-          # UPDATE HOMEPAGE
+          # GIT COMMIT
           # ==================================================
 
-          index_file = "index.html"
+          os.system("git config user.name 'AI Article Bot'")
+          os.system("git config user.email 'bot@aihindhub.local'")
+          os.system(f"git add {filename}")
+          os.system(
+              f"git commit -m "
+              f"'🤖 Auto: New article - {title}'"
+          )
+          os.system("git push")
 
-
-          with open(
-              index_file,
-              "r",
-              encoding="utf-8"
-          ) as f:
-
-              index = f.read()
-
-
-          marker_start = (
-              "<!-- AI-AUTO-ARTICLES-START -->"
+          print(
+              "✅ Article committed and pushed!"
           )
 
-          marker_end = (
-              "<!-- AI-AUTO-ARTICLES-END -->"
-          )
-
-
-          new_card = f"""
-
-          <div class="article-card ai-generated-article-card">
-
-            <h3>
-              {html_lib.escape(title)}
-            </h3>
-
-            <p>
-              {html_lib.escape(description)}
-            </p>
-
-            <a
-              href="{html_lib.escape(filename, quote=True)}"
-              class="read-btn"
-            >
-              Read More →
-            </a>
-
-          </div>
-
-          """
-
-
-          # ==================================================
-          # INSERT ARTICLE
-          # ==================================================
-
-          if (
-              marker_start in index
-              and marker_end in index
-          ):
-
-              insert_at = (
-                  index.find(marker_start)
-                  + len(marker_start)
-              )
-
-
-              index = (
-                  index[:insert_at]
-                  + new_card
-                  + index[insert_at:]
-              )
-
-
-          else:
-
-              latest_position = index.find(
-                  "<!-- Latest Articles -->"
-              )
-
-
-              if latest_position == -1:
-
-                  raise SystemExit(
-                      "Latest Articles section not found."
-                  )
-
-
-              grid_position = index.find(
-                  '<div class="article-grid">',
-                  latest_position
-              )
-
-
-              if grid_position == -1:
-
-                  raise SystemExit(
-                      "article-grid not found."
-                  )
-
-
-              insert_position = (
-                  grid_position
-                  + len(
-                      '<div class="article-grid">'
-                  )
-              )
-
-
-              ai_block = f"""
-
-              {marker_start}
-
-              {new_card}
-
-              {marker_end}
-
-              """
-
-
-              index = (
-                  index[:insert_position]
-                  + ai_block
-                  + index[insert_position:]
-              )
-
-
-          with open(
-              index_file,
-              "w",
-              encoding="utf-8"
-          ) as f:
-
-              f.write(index)
-                    # WRITE UPDATED INDEX
-      with open(index_file, "w", encoding="utf-8") as f:
-          f.write(index_html)
-
-      # =========================
-      # BETTER SITEMAP
-      # =========================
-
-      sitemap_file = "sitemap.xml"
-
-      static_pages = [
-          "index.html",
-          "about.html",
-          "aitools.html",
-          "Contact.html",
-          "privacy.html",
-          "disclaimer.html",
-          "terms.html"
-      ]
-
-      sitemap_urls = []
-
-      # Add static pages
-      for page in static_pages:
-          page_path = os.path.join(".", page)
-
-          if os.path.exists(page_path):
-              sitemap_urls.append(
-                  SITE_URL.rstrip("/") + "/" + page
-              )
-
-      # Add all HTML article pages
-      for root, dirs, files in os.walk("."):
-          dirs[:] = [
-              d for d in dirs
-              if d not in [
-                  ".git",
-                  ".github",
-                  "__pycache__"
-              ]
-          ]
-
-          for file_name in files:
-              if not file_name.endswith(".html"):
-                  continue
-
-              full_path = os.path.join(root, file_name)
-
-              # Skip static pages already added
-              relative_path = os.path.relpath(
-                  full_path,
-                  "."
-              ).replace(os.sep, "/")
-
-              if relative_path in static_pages:
-                  continue
-
-              sitemap_urls.append(
-                  SITE_URL.rstrip("/") + "/" + relative_path
-              )
-
-      # Remove duplicate URLs
-      seen = set()
-      unique_urls = []
-
-      for url in sitemap_urls:
-          if url not in seen:
-              seen.add(url)
-              unique_urls.append(url)
-
-      sitemap_urls = unique_urls
-
-      # Create sitemap XML
-      xml = [
-          '<?xml version="1.0" encoding="UTF-8"?>',
-          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-      ]
-
-      today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-      for url in sitemap_urls:
-          xml.append("  <url>")
-          xml.append(
-              f"    <loc>{url}</loc>"
-          )
-          xml.append(
-              f"    <lastmod>{today}</lastmod>"
-          )
-          xml.append("  </url>")
-
-      xml.append("</urlset>")
-
-      with open(
-          sitemap_file,
-          "w",
-          encoding="utf-8"
-      ) as f:
-          f.write("\n".join(xml))
-
-      # =========================
-      # SUCCESS LOG
-      # =========================
-
-      print("")
-      print("========================================")
-      print("       ARTICLE GENERATED SUCCESSFULLY")
-      print("========================================")
-      print("")
-      print(f"Title: {title}")
-      print(f"Words: {word_count}")
-      print(f"File: {article_file}")
-      print(f"URL: {article_url}")
-      print(f"Internal links: {len(internal_links)}")
-      print(f"Sitemap URLs: {len(sitemap_urls)}")
-      print("")
-      print("Done!")
-      print("========================================")
-
-PY
-
-    # =========================
-    # COMMIT AND PUSH
-    # =========================
-
-    - name: Commit and push article
-      run: |
-        git config user.name "AiHindiHub AI"
-        git config user.email \
-          "41898282+github-actions[bot]@users.noreply.github.com"
-
-        git add .
-
-        if git diff --cached --quiet; then
-          echo "No changes to commit."
-          exit 0
-        fi
-
-        git commit \
-          -m "AI: publish new Hindi SEO article"
-
-        git push
-                  
+          PY
