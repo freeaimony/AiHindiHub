@@ -1,3 +1,4 @@
+
 name: AI Automatic Article
 
 on:
@@ -16,45 +17,53 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ai-article
+  cancel-in-progress: false
+
 jobs:
+
   generate-article:
+
     runs-on: ubuntu-latest
 
     steps:
 
-      # ==================================================
+      # ============================================
       # CHECKOUT
-      # ==================================================
+      # ============================================
 
       - name: Checkout repository
+
         uses: actions/checkout@v4
 
-      # ==================================================
+
+      # ============================================
       # GENERATE ARTICLE
-      # ==================================================
+      # ============================================
 
       - name: Generate article with Gemini
+
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
         run: |
 
-          python3 <<'PY'
+          cat > generate_article.py <<'PY'
 
           import os
           import json
           import re
-          import html as html_lib
+          import html
           import time
           import urllib.request
           import urllib.error
-
           from datetime import datetime, timezone
 
 
-          # ==================================================
+          # ============================================
           # API KEY
-          # ==================================================
+          # ============================================
 
           API_KEY = os.environ.get("GEMINI_API_KEY")
 
@@ -64,26 +73,230 @@ jobs:
               )
 
 
-          # ==================================================
+          # ============================================
           # WEBSITE
-          # ==================================================
+          # ============================================
 
-          SITE_BASE = (
-              "https://freeaimony.github.io/AiHindiHub/"
+          SITE = "https://freeaimony.github.io/AiHindiHub/"
+
+
+          # ============================================
+          # AVAILABLE GEMINI MODELS
+          # ============================================
+
+          def get_available_model():
+
+              url = (
+                  "https://generativelanguage.googleapis.com/"
+                  "v1beta/models"
+              )
+
+              request = urllib.request.Request(
+                  url,
+                  headers={
+                      "x-goog-api-key": API_KEY
+                  },
+                  method="GET"
+              )
+
+              try:
+
+                  with urllib.request.urlopen(
+                      request,
+                      timeout=60
+                  ) as response:
+
+                      data = json.loads(
+                          response.read().decode("utf-8")
+                      )
+
+              except Exception as e:
+
+                  raise SystemExit(
+                      "Could not get Gemini model list: "
+                      + str(e)
+                  )
+
+
+              models = data.get("models", [])
+
+
+              preferred = [
+                  "gemini-3.5-flash",
+                  "gemini-3.1-flash-lite",
+                  "gemini-2.5-flash-lite",
+                  "gemini-2.5-flash"
+              ]
+
+
+              for preferred_name in preferred:
+
+                  for model in models:
+
+                      name = model.get("name", "")
+
+                      methods = model.get(
+                          "supportedGenerationMethods",
+                          []
+                      )
+
+                      if (
+                          name == "models/" + preferred_name
+                          and
+                          "generateContent" in methods
+                      ):
+
+                          print(
+                              "Selected Gemini model:",
+                              name
+                          )
+
+                          return name
+
+
+              # Generic fallback
+
+              for model in models:
+
+                  name = model.get("name", "")
+
+                  methods = model.get(
+                      "supportedGenerationMethods",
+                      []
+                  )
+
+                  if (
+                      name.startswith("models/gemini-")
+                      and
+                      "generateContent" in methods
+                  ):
+
+                      print(
+                          "Selected fallback Gemini model:",
+                          name
+                      )
+
+                      return name
+
+
+              raise SystemExit(
+                  "No Gemini model supporting generateContent "
+                  "was found for this API key."
+              )
+
+
+          MODEL = get_available_model()
+
+
+          # ============================================
+          # FIND EXISTING ARTICLES
+          # ============================================
+
+          existing_articles = []
+
+
+          ignored_files = {
+              "index.html",
+              "about.html",
+              "aitools.html",
+              "contact.html",
+              "Contact.html",
+              "privacy.html",
+              "terms.html",
+              "disclaimer.html"
+          }
+
+
+          for filename in os.listdir("."):
+
+              if not filename.endswith(".html"):
+                  continue
+
+              if filename in ignored_files:
+                  continue
+
+              try:
+
+                  with open(
+                      filename,
+                      "r",
+                      encoding="utf-8"
+                  ) as f:
+
+                      content = f.read()
+
+
+                  match = re.search(
+                      r"<title[^>]*>(.*?)</title>",
+                      content,
+                      re.I | re.S
+                  )
+
+
+                  if match:
+
+                      article_title = re.sub(
+                          r"<[^>]+>",
+                          "",
+                          match.group(1)
+                      )
+
+                      article_title = html.unescape(
+                          article_title
+                      )
+
+                      article_title = re.sub(
+                          r"\s+",
+                          " ",
+                          article_title
+                      ).strip()
+
+
+                      article_title = re.sub(
+                          r"\s*\|\s*AIHindiHub\s*$",
+                          "",
+                          article_title,
+                          flags=re.I
+                      )
+
+
+                      if article_title:
+
+                          existing_articles.append(
+                              {
+                                  "file": filename,
+                                  "title": article_title
+                              }
+                          )
+
+              except Exception:
+                  pass
+
+
+          print(
+              "Existing articles:",
+              len(existing_articles)
           )
 
 
-          # ==================================================
+          previous_titles = "\n".join(
+              "- " + x["title"]
+              for x in existing_articles[-40:]
+          )
+
+
+          # ============================================
           # AI PROMPT
-          # ==================================================
+          # ============================================
 
-          prompt = """
+          prompt = f"""
+          तुम AiHindiHub नाम की Hindi AI और Technology website
+          के लिए एक नया original SEO-friendly article लिख रहे हो।
 
-          तुम AiHindiHub नाम की Hindi AI और Technology
-          website के लिए एक नया original SEO-friendly article
-          लिख रहे हो।
+          Website:
+          {SITE}
 
-          Topic इन categories में से होना चाहिए:
+          Article का topic इन categories में से होना चाहिए:
 
           AI
           Artificial Intelligence
@@ -95,78 +308,64 @@ jobs:
           Online Work
           Digital Technology
 
+          पहले से प्रकाशित articles:
+
+          {previous_titles}
+
           IMPORTANT RULES:
 
-          1. Article पूरी तरह Hindi में लिखो।
+          1. बिल्कुल नया topic चुनो।
+          2. Existing articles को repeat मत करो।
+          3. Article पूरी तरह Hindi में लिखो।
+          4. जरूरी technical terms English में रख सकते हो।
+          5. Content original होना चाहिए।
+          6. किसी website से text copy मत करो।
+          7. Article लगभग 1200 से 1400 words का होना चाहिए।
+          8. 1000 words से कम नहीं होना चाहिए।
+          9. 1500 words से ज्यादा बिल्कुल नहीं होना चाहिए।
+          10. Strong introduction दो।
+          11. H2 और H3 headings इस्तेमाल करो।
+          12. Practical examples दो।
+          13. Useful tips दो।
+          14. जरूरत के अनुसार ul, ol और table HTML इस्तेमाल कर सकते हो।
+          15. Keyword stuffing मत करो।
+          16. Fake statistics मत बनाओ।
+          17. Fake claims मत करो।
+          18. Markdown इस्तेमाल मत करो।
+          19. केवल HTML article body दो।
+          20. अंत में Conclusion जरूर दो।
+          21. Title छोटा और clickable होना चाहिए।
+          22. Meta description maximum 155 characters हो।
+          23. Slug English lowercase और hyphen वाला हो।
+          24. External links मत डालो।
+          25. केवल valid JSON वापस करो।
+          26. JSON के बाहर कोई text मत लिखो।
 
-          2. जरूरी technical terms English में रख सकते हो।
+          JSON FORMAT:
 
-          3. Article original होना चाहिए।
-
-          4. किसी दूसरे website का text copy मत करो।
-
-          5. Article लगभग 1100 से 1350 words का रखो।
-
-          6. किसी भी हालत में 1500 words से ज्यादा मत लिखो।
-
-          7. Article 1000 words से कम भी नहीं होना चाहिए।
-
-          8. Strong और useful introduction दो।
-
-          9. H2 और H3 headings इस्तेमाल करो।
-
-          10. Practical examples दो।
-
-          11. Readers के लिए useful tips दो।
-
-          12. जरूरत हो तो numbered list और bullet list के लिए
-              HTML tags इस्तेमाल करो।
-
-          13. अंत में Conclusion दो।
-
-          14. Keyword stuffing मत करो।
-
-          15. Fake claims मत करो।
-
-          16. Unsupported statistics मत बनाओ।
-
-          17. Markdown इस्तेमाल मत करो।
-
-          18. केवल HTML body content दो।
-
-          19. Article का topic पहले से published article
-              जैसा नहीं होना चाहिए।
-
-          20. Internal links automation खुद लगाएगा।
-
-          केवल valid JSON लौटाओ।
-
-          JSON format:
-
-          {
+          {{
             "title": "SEO Article Title",
-            "description": "SEO meta description maximum 155 characters",
+            "description": "SEO meta description",
             "slug": "seo-friendly-slug",
             "keywords": "keyword1, keyword2, keyword3",
-            "html": "<article><h2>...</h2><p>...</p></article>"
-          }
-
-          JSON के बाहर कोई text मत लिखो।
-
+            "html": "<article><p>...</p><h2>...</h2></article>"
+          }}
           """
 
 
-          # ==================================================
-          # GEMINI API FUNCTION (FIXED)
-          # ==================================================
+          # ============================================
+          # GEMINI REQUEST
+          # ============================================
 
-          def call_gemini(model_name, attempts=4):
+          def call_gemini():
 
               url = (
-                  f"https://generativelanguage.googleapis.com/"
-                  f"v1beta/models/{model_name}:generateContent"
-                  f"?key={API_KEY}"
+                  "https://generativelanguage.googleapis.com/"
+                  "v1beta/"
+                  + MODEL
+                  + ":generateContent"
               )
+
 
               payload = {
                   "contents": [
@@ -179,59 +378,35 @@ jobs:
                       }
                   ],
                   "generationConfig": {
-                      "maxOutputTokens": 5000,
-                      "temperature": 1,
-                      "responseMimeType": "application/json",
-                      "responseSchema": {
-                          "type": "object",
-                          "properties": {
-                              "title": {
-                                  "type": "string"
-                              },
-                              "description": {
-                                  "type": "string"
-                              },
-                              "slug": {
-                                  "type": "string"
-                              },
-                              "keywords": {
-                                  "type": "string"
-                              },
-                              "html": {
-                                  "type": "string"
-                              }
-                          },
-                          "required": [
-                              "title",
-                              "description",
-                              "slug",
-                              "keywords",
-                              "html"
-                          ]
-                      }
+                      "temperature": 0.7,
+                      "maxOutputTokens": 8000
                   }
               }
+
 
               request_data = json.dumps(
                   payload,
                   ensure_ascii=False
               ).encode("utf-8")
 
-              for attempt in range(1, attempts + 1):
+
+              for attempt in range(1, 4):
 
                   print(
-                      f"Gemini attempt {attempt}/{attempts} "
-                      f"using {model_name}"
+                      f"Gemini request {attempt}/3..."
                   )
+
 
                   request = urllib.request.Request(
                       url,
                       data=request_data,
                       headers={
-                          "Content-Type": "application/json"
+                          "Content-Type": "application/json",
+                          "x-goog-api-key": API_KEY
                       },
                       method="POST"
                   )
+
 
                   try:
 
@@ -240,36 +415,84 @@ jobs:
                           timeout=180
                       ) as response:
 
-                          response_text = (
-                              response
-                              .read()
-                              .decode("utf-8")
+                          raw = response.read().decode(
+                              "utf-8"
                           )
 
-                          response_data = json.loads(
-                              response_text
+                          data = json.loads(raw)
+
+
+                      candidates = data.get(
+                          "candidates",
+                          []
+                      )
+
+
+                      if candidates:
+
+                          parts = (
+                              candidates[0]
+                              .get("content", {})
+                              .get("parts", [])
                           )
 
-                          return response_data
+
+                          text_parts = []
+
+
+                          for part in parts:
+
+                              if part.get("text"):
+
+                                  text_parts.append(
+                                      part["text"]
+                                  )
+
+
+                          output = "".join(
+                              text_parts
+                          ).strip()
+
+
+                          if output:
+
+                              print(
+                                  "Gemini response received."
+                              )
+
+                              return output
+
+
+                      print(
+                          "Gemini returned empty response."
+                      )
+
 
                   except urllib.error.HTTPError as e:
 
                       error_body = ""
 
                       try:
+
                           error_body = (
                               e.read()
                               .decode("utf-8")
                           )
+
                       except Exception:
                           pass
 
+
                       print(
-                          f"Gemini HTTP {e.code}: "
-                          f"{error_body[:1000]}"
+                          "Gemini HTTP error:",
+                          e.code
                       )
 
-                      # Retry temporary server/rate-limit errors
+                      print(
+                          error_body[:1500]
+                      )
+
+
                       if e.code in [
                           429,
                           500,
@@ -278,255 +501,118 @@ jobs:
                           504
                       ]:
 
-                          if attempt < attempts:
-
-                              wait_time = (
-                                  attempt * 10
-                              )
-
-                              print(
-                                  f"Temporary error. "
-                                  f"Retrying in "
-                                  f"{wait_time} seconds..."
-                              )
+                          if attempt < 3:
 
                               time.sleep(
-                                  wait_time
+                                  attempt * 10
                               )
 
                               continue
 
+
                       raise
+
 
                   except Exception as e:
 
                       print(
-                          f"Gemini connection error: {e}"
+                          "Gemini connection error:",
+                          str(e)
                       )
 
-                      if attempt < attempts:
 
-                          wait_time = (
-                              attempt * 10
-                          )
-
-                          print(
-                              f"Retrying in "
-                              f"{wait_time} seconds..."
-                          )
+                      if attempt < 3:
 
                           time.sleep(
-                              wait_time
+                              attempt * 10
                           )
 
                           continue
 
+
                       raise
 
 
-          # ==================================================
-          # CALL GEMINI
-          # ==================================================
-
-          data = None
-
-          try:
-
-              data = call_gemini(
-               "gemini-2.5-flash",
-                  attempts=4
-            )  
-
-          except Exception as first_error:
-
-              print(
-                  "Primary Gemini model failed."
-              )    
-
-              print(
-                  str(first_error)
-              )
-
-              # Fallback model
-              try:
-
-                  print(
-                      "Trying fallback Gemini model..."
-                  )
-
-                               data = call_gemini(
-                                       "gemini-2.5-flash",
-                                                attempts=3
-                                        )
-
-              except Exception as fallback_error:
-
-                  raise SystemExit(
-                      "Gemini API failed after retries. "
-                      + str(fallback_error)
-                  )
-
-
-          # ==================================================
-          # CHECK RESPONSE (FIXED)
-          # ==================================================
-
-          if not data:
-
               raise SystemExit(
-                  "Gemini returned an empty response."
+                  "Gemini failed after 3 attempts."
               )
 
 
-          # Extract text from candidates
-          candidates = data.get("candidates", [])
+          # ============================================
+          # GET AI OUTPUT
+          # ============================================
 
-          if not candidates:
-
-              raise SystemExit(
-                  "Gemini returned no candidates: "
-                  + json.dumps(data, ensure_ascii=False)[:1000]
-              )
+          output = call_gemini()
 
 
-          first_candidate = candidates[0]
-          content = first_candidate.get("content", {})
-          parts = content.get("parts", [])
-
-          if not parts:
-
-              raise SystemExit(
-                  "Gemini returned no parts in content."
-              )
-
-
-          output = ""
-
-          for part in parts:
-
-              if part.get("text"):
-
-                  output += part.get("text", "")
-
-
-          if not output:
-
-              raise SystemExit(
-                  "Gemini returned no text."
-              )
-
+          # ============================================
+          # CLEAN JSON
+          # ============================================
 
           output = output.strip()
 
 
-          # ==================================================
-          # PARSE GEMINI JSON
-          # ==================================================
-
-          def parse_gemini_json(text_data):
-
-              if not text_data:
-                  return None
-
-              cleaned = text_data.strip()
-
-              # Normal case:
-              # structured output is already valid JSON.
-              try:
-
-                  parsed = json.loads(
-                      cleaned
-                  )
-
-                  if isinstance(
-                      parsed,
-                      dict
-                  ):
-                      return parsed
-
-              except json.JSONDecodeError:
-
-                  pass
-
-              # Fallback if model adds markdown JSON fence.
-              cleaned = re.sub(
-                  r"^```(?:json)?\s*",
-                  "",
-                  cleaned,
-                  flags=re.I
-              )
-
-              cleaned = re.sub(
-                  r"\s*```$",
-                  "",
-                  cleaned
-              ).strip()
-
-              try:
-
-                  parsed = json.loads(
-                      cleaned
-                  )
-
-                  if isinstance(
-                      parsed,
-                      dict
-                  ):
-                      return parsed
-
-              except json.JSONDecodeError:
-
-                  pass
-
-              # Last fallback:
-              # decode first complete JSON object.
-              decoder = json.JSONDecoder()
-
-              try:
-
-                  start_index = cleaned.find("{")
-
-                  if start_index >= 0:
-
-                      parsed, _ = decoder.raw_decode(
-                          cleaned[start_index:]
-                      )
-
-                      if isinstance(
-                          parsed,
-                          dict
-                      ):
-                          return parsed
-
-              except (
-                  json.JSONDecodeError,
-                  ValueError
-              ):
-
-                  pass
-
-              return None
+          output = re.sub(
+              r"^```json\s*",
+              "",
+              output,
+              flags=re.I
+          )
 
 
-          article = parse_gemini_json(
+          output = re.sub(
+              r"^```\s*",
+              "",
               output
           )
 
-          if not article:
+
+          output = re.sub(
+              r"\s*```$",
+              "",
+              output
+          ).strip()
+
+
+          article = None
+
+
+          try:
+
+              article = json.loads(
+                  output
+              )
+
+          except json.JSONDecodeError:
+
+              start = output.find("{")
+              end = output.rfind("}")
+
+
+              if start >= 0 and end > start:
+
+                  try:
+
+                      article = json.loads(
+                          output[start:end + 1]
+                      )
+
+                  except Exception:
+                      article = None
+
+
+          if not isinstance(article, dict):
 
               raise SystemExit(
-                  "Gemini returned invalid JSON even though "
-                  "structured JSON output was requested. "
-                  "Raw output starts with: "
-                  + output[:1000]
+                  "Gemini returned invalid JSON."
               )
 
 
-          # ==================================================
+          # ============================================
           # REQUIRED FIELDS
-          # ==================================================
+          # ============================================
 
-          required_fields = [
+          required = [
               "title",
               "description",
               "slug",
@@ -534,44 +620,53 @@ jobs:
               "html"
           ]
 
-          for key in required_fields:
 
-              if not article.get(key):
+          for field in required:
+
+              if not article.get(field):
 
                   raise SystemExit(
-                      f"Missing field: {key}"
+                      "Missing field: " + field
                   )
+
 
           title = str(
               article["title"]
           ).strip()
 
+
           description = str(
               article["description"]
           ).strip()
 
-          description = re.sub(
-              r"\s+",
-              " ",
-              description
-          )[:155]
-
-          slug = str(
-              article["slug"]
-          ).strip().lower()
 
           keywords = str(
               article["keywords"]
           ).strip()
+
 
           body_html = str(
               article["html"]
           ).strip()
 
 
-          # ==================================================
-          # REMOVE DANGEROUS/UNNECESSARY HTML
-          # ==================================================
+          # ============================================
+          # DESCRIPTION LIMIT
+          # ============================================
+
+          description = re.sub(
+              r"\s+",
+              " ",
+              description
+          ).strip()
+
+
+          description = description[:155]
+
+
+          # ============================================
+          # REMOVE DANGEROUS HTML
+          # ============================================
 
           body_html = re.sub(
               r"<script\b[^>]*>.*?</script>",
@@ -579,6 +674,7 @@ jobs:
               body_html,
               flags=re.I | re.S
           )
+
 
           body_html = re.sub(
               r"<iframe\b[^>]*>.*?</iframe>",
@@ -588,9 +684,9 @@ jobs:
           )
 
 
-          # ==================================================
+          # ============================================
           # WORD COUNT
-          # ==================================================
+          # ============================================
 
           plain_text = re.sub(
               r"<[^>]+>",
@@ -598,60 +694,59 @@ jobs:
               body_html
           )
 
+
+          plain_text = html.unescape(
+              plain_text
+          )
+
+
           plain_text = re.sub(
               r"\s+",
               " ",
               plain_text
           ).strip()
 
+
           word_count = len(
               plain_text.split()
           )
 
-          print(
-              "--------------------------------"
-          )
 
           print(
-              "ARTICLE WORD COUNT:",
+              "Article word count:",
               word_count
           )
 
-          print(
-              "--------------------------------"
-          )
-
-
-          # ==================================================
-          # HARD LIMIT
-          # ==================================================
-
-          if word_count > 1500:
-
-              raise SystemExit(
-                  f"Article rejected: "
-                  f"{word_count} words. "
-                  "Maximum allowed is 1500."
-              )
 
           if word_count < 1000:
 
               raise SystemExit(
-                  f"Article rejected: "
-                  f"{word_count} words. "
-                  "Minimum required is 1000."
+                  f"Article too short: {word_count} words."
               )
 
 
-          # ==================================================
-          # SAFE SLUG
-          # ==================================================
+          if word_count > 1500:
+
+              raise SystemExit(
+                  f"Article too long: {word_count} words."
+              )
+
+
+          # ============================================
+          # SLUG
+          # ============================================
+
+          slug = str(
+              article["slug"]
+          ).strip().lower()
+
 
           slug = re.sub(
               r"[^a-z0-9-]",
               "-",
               slug
           )
+
 
           slug = re.sub(
               r"-+",
@@ -663,18 +758,12 @@ jobs:
           if not slug:
 
               raise SystemExit(
-                  "Invalid article slug."
+                  "Invalid slug."
               )
 
 
-          filename = (
-              f"{slug}.html"
-          )
+          filename = slug + ".html"
 
-
-          # ==================================================
-          # PREVENT OVERWRITING
-          # ==================================================
 
           if os.path.exists(filename):
 
@@ -684,37 +773,40 @@ jobs:
                   "%Y%m%d%H%M%S"
               )
 
+
               filename = (
-                  f"{slug}-{timestamp}.html"
+                  slug
+                  + "-"
+                  + timestamp
+                  + ".html"
               )
 
 
-          # ==================================================
-          # DATE
-          # ==================================================
+          # ============================================
+          # DATE / URL
+          # ============================================
 
           now = datetime.now(
               timezone.utc
           )
 
+
           today = now.strftime(
               "%Y-%m-%d"
           )
+
 
           published_iso = now.strftime(
               "%Y-%m-%dT%H:%M:%SZ"
           )
 
 
-          site_url = (
-              SITE_BASE
-              + filename
-          )
+          article_url = SITE + filename
 
 
-          # ==================================================
-          # FIND EXISTING ARTICLES
-          # ==================================================
+          # ============================================
+          # FIND LAST ARTICLES
+          # ============================================
 
           existing_articles = []
 
@@ -724,226 +816,153 @@ jobs:
               if not f.endswith(".html"):
                   continue
 
-              if f in [
-                  "index.html",
-                  filename,
-                  "about.html",
-                  "aitools.html",
-                  "Contact.html",
-                  "privacy.html",
-                  "disclaimer.html",
-                  "terms.html"
-              ]:
+
+              if f in ignored_files:
                   continue
+
 
               try:
 
                   with open(
                       f,
+                      "r",
                       encoding="utf-8"
                   ) as rf:
 
-                      txt = rf.read()
-
-              except Exception:
-
-                  continue
+                      text = rf.read()
 
 
-              match = re.search(
-                  r"<title[^>]*>(.*?)</title>",
-                  txt,
-                  re.I | re.S
-              )
-
-
-              if match:
-
-                  article_title = re.sub(
-                      r"<[^>]+>",
-                      "",
-                      match.group(1)
-                  )
-
-                  article_title = re.sub(
-                      r"\s+",
-                      " ",
-                      article_title
-                  ).strip()
-
-                  article_title = re.sub(
-                      r"\s*\|\s*AIHindiHub\s*$",
-                      "",
-                      article_title,
-                      flags=re.I
+                  match = re.search(
+                      r"<title[^>]*>(.*?)</title>",
+                      text,
+                      re.I | re.S
                   )
 
 
-                  if article_title:
+                  if match:
 
-                      existing_articles.append(
-                          (
-                              f,
-                              article_title
-                          )
+                      old_title = re.sub(
+                          r"<[^>]+>",
+                          "",
+                          match.group(1)
                       )
 
 
-          # Last 5 articles
-
-          existing_articles = (
-              existing_articles[-5:]
-          )
+                      old_title = html.unescape(
+                          old_title
+                      )
 
 
-          # ==================================================
-          # INTERNAL LINKS
-          # ==================================================
-
-          related_links = ""
-
-
-          if existing_articles:
-
-              related_links = """
-              <section class="related-articles">
-                <h2>आपके लिए उपयोगी लेख</h2>
-                <ul>
-              """
+                      old_title = re.sub(
+                          r"\s+",
+                          " ",
+                          old_title
+                      ).strip()
 
 
-              for f, t in existing_articles:
+                      old_title = re.sub(
+                          r"\s*\|\s*AIHindiHub\s*$",
+                          "",
+                          old_title,
+                          flags=re.I
+                      )
 
-                  related_links += (
-                      '<li>'
-                      f'<a href="{html_lib.escape(f, quote=True)}">'
-                      f'{html_lib.escape(t)}'
-                      '</a>'
-                      '</li>\n'
+
+                      if old_title:
+
+                          existing_articles.append(
+                              {
+                                  "file": f,
+                                  "title": old_title
+                              }
+                          )
+
+
+              except Exception:
+                  pass
+
+
+          related = existing_articles[-5:]
+
+
+          # ============================================
+          # RELATED ARTICLES
+          # ============================================
+
+          related_html = ""
+
+
+          if related:
+
+              related_html = """
+          <section class="related-articles">
+          <h2>आपके लिए उपयोगी लेख</h2>
+          <ul>
+          """
+
+
+              for item in reversed(related):
+
+                  related_html += (
+                      "<li>"
+                      '<a href="'
+                      + html.escape(
+                          item["file"],
+                          quote=True
+                      )
+                      + '">'
+                      + html.escape(
+                          item["title"]
+                      )
+                      + "</a>"
+                      "</li>"
                   )
 
 
-              related_links += """
-                </ul>
-              </section>
-              """
+              related_html += """
+          </ul>
+          </section>
+          """
 
 
-          # ==================================================
-          # SEO SCHEMA
-          # ==================================================
+          # ============================================
+          # SCHEMA
+          # ============================================
 
           schema = {
 
               "@context": "https://schema.org",
 
-              "@graph": [
+              "@type": "Article",
 
-                  {
+              "headline": title,
 
-                      "@type": "Article",
+              "description": description,
 
-                      "@id":
-                          site_url
-                          + "#article",
+              "keywords": keywords,
 
-                      "headline":
-                          title,
+              "datePublished": published_iso,
 
-                      "description":
-                          description,
+              "dateModified": published_iso,
 
-                      "keywords":
-                          keywords,
+              "inLanguage": "hi-IN",
 
-                      "datePublished":
-                          published_iso,
+              "author": {
+                  "@type": "Organization",
+                  "name": "AIHindiHub",
+                  "url": SITE
+              },
 
-                      "dateModified":
-                          published_iso,
+              "publisher": {
+                  "@type": "Organization",
+                  "name": "AIHindiHub",
+                  "url": SITE
+              },
 
-                      "inLanguage":
-                          "hi-IN",
-
-                      "author": {
-
-                          "@type":
-                              "Organization",
-
-                          "name":
-                              "AiHindiHub",
-
-                          "url":
-                              SITE_BASE
-                      },
-
-                      "publisher": {
-
-                          "@type":
-                              "Organization",
-
-                          "name":
-                              "AiHindiHub",
-
-                          "url":
-                              SITE_BASE
-                      },
-
-                      "mainEntityOfPage": {
-
-                          "@type":
-                              "WebPage",
-
-                          "@id":
-                              site_url
-                      }
-
-                  },
-
-
-                  {
-
-                      "@type":
-                          "BreadcrumbList",
-
-                      "itemListElement": [
-
-                          {
-
-                              "@type":
-                                  "ListItem",
-
-                              "position":
-                                  1,
-
-                              "name":
-                                  "Home",
-
-                              "item":
-                                  SITE_BASE
-                          },
-
-                          {
-
-                              "@type":
-                                  "ListItem",
-
-                              "position":
-                                  2,
-
-                              "name":
-                                  title,
-
-                              "item":
-                                  site_url
-                          }
-
-                      ]
-
-                  }
-
-              ]
-
+              "mainEntityOfPage": {
+                  "@type": "WebPage",
+                  "@id": article_url
+              }
           }
 
 
@@ -954,9 +973,32 @@ jobs:
           )
 
 
-          # ==================================================
+          # ============================================
           # CREATE ARTICLE PAGE
-          # ==================================================
+          # ============================================
+
+          safe_title = html.escape(
+              title
+          )
+
+
+          safe_description = html.escape(
+              description,
+              quote=True
+          )
+
+
+          safe_keywords = html.escape(
+              keywords,
+              quote=True
+          )
+
+
+          safe_url = html.escape(
+              article_url,
+              quote=True
+          )
+
 
           page = f"""<!DOCTYPE html>
           <html lang="hi">
@@ -966,37 +1008,35 @@ jobs:
           <meta charset="UTF-8">
 
           <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1.0"
+              name="viewport"
+              content="width=device-width, initial-scale=1.0"
           >
 
-          <title>
-          {html_lib.escape(title)} | AIHindiHub
-          </title>
+          <title>{safe_title} | AIHindiHub</title>
 
           <meta
-            name="description"
-            content="{html_lib.escape(description, quote=True)}"
-          >
-
-          <meta
-            name="keywords"
-            content="{html_lib.escape(keywords, quote=True)}"
+              name="description"
+              content="{safe_description}"
           >
 
           <meta
-            name="robots"
-            content="index, follow"
+              name="keywords"
+              content="{safe_keywords}"
+          >
+
+          <meta
+              name="robots"
+              content="index, follow"
           >
 
           <link
-            rel="canonical"
-            href="{html_lib.escape(site_url, quote=True)}"
+              rel="canonical"
+              href="{safe_url}"
           >
 
           <link
-            rel="stylesheet"
-            href="style.css"
+              rel="stylesheet"
+              href="style.css"
           >
 
           <script type="application/ld+json">
@@ -1007,13 +1047,17 @@ jobs:
 
           <body>
 
-          <article>
+          <main class="container">
+
+          <article class="ai-generated-article">
 
           {body_html}
 
           </article>
 
-          {related_links}
+          {related_html}
+
+          </main>
 
           </body>
 
@@ -1021,46 +1065,273 @@ jobs:
           """
 
 
-          # ==================================================
-          # WRITE FILE
-          # ==================================================
+          with open(
+              filename,
+              "w",
+              encoding="utf-8"
+          ) as f:
 
-          try:
+              f.write(page)
 
-              with open(
-                  filename,
-                  "w",
-                  encoding="utf-8"
-              ) as f:
-
-                  f.write(page)
-
-              print(
-                  f"✅ Article saved: {filename}"
-              )
-
-          except Exception as e:
-
-              raise SystemExit(
-                  f"Failed to write file: {e}"
-              )
-
-
-          # ==================================================
-          # GIT COMMIT
-          # ==================================================
-
-          os.system("git config user.name 'AI Article Bot'")
-          os.system("git config user.email 'bot@aihindhub.local'")
-          os.system(f"git add {filename}")
-          os.system(
-              f"git commit -m "
-              f"'🤖 Auto: New article - {title}'"
-          )
-          os.system("git push")
 
           print(
-              "✅ Article committed and pushed!"
+              "Article created:",
+              filename
           )
 
+
+          # ============================================
+          # UPDATE HOMEPAGE
+          # ============================================
+
+          index_file = "index.html"
+
+
+          if not os.path.exists(index_file):
+
+              raise SystemExit(
+                  "index.html not found."
+              )
+
+
+          with open(
+              index_file,
+              "r",
+              encoding="utf-8"
+          ) as f:
+
+              index = f.read()
+
+
+          marker_start = (
+              "<!-- AI-AUTO-ARTICLES-START -->"
+          )
+
+
+          marker_end = (
+              "<!-- AI-AUTO-ARTICLES-END -->"
+          )
+
+
+          new_card = f"""
+          <div class="article-card ai-generated-article-card">
+
+              <h3>{safe_title}</h3>
+
+              <p>{safe_description}</p>
+
+              <a
+                  href="{html.escape(filename, quote=True)}"
+                  class="read-btn"
+              >
+                  Read More →
+              </a>
+
+          </div>
+          """
+
+
+          if (
+              marker_start in index
+              and marker_end in index
+          ):
+
+              start_pos = (
+                  index.find(marker_start)
+                  + len(marker_start)
+              )
+
+
+              index = (
+                  index[:start_pos]
+                  + new_card
+                  + index[start_pos:]
+              )
+
+
+          else:
+
+              latest_position = index.find(
+                  "<!-- Latest Articles -->"
+              )
+
+
+              if latest_position >= 0:
+
+                  grid_position = index.find(
+                      '<div class="article-grid">',
+                      latest_position
+                  )
+
+
+                  if grid_position >= 0:
+
+                      insert_position = (
+                          grid_position
+                          + len(
+                              '<div class="article-grid">'
+                          )
+                      )
+
+
+                      block = f"""
+
+          {marker_start}
+
+          {new_card}
+
+          {marker_end}
+
+          """
+
+
+                      index = (
+                          index[:insert_position]
+                          + block
+                          + index[insert_position:]
+                      )
+
+
+          with open(
+              index_file,
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              f.write(index)
+
+
+          # ============================================
+          # REBUILD SITEMAP
+          # ============================================
+
+          static_pages = [
+              "index.html",
+              "about.html",
+              "aitools.html",
+              "Contact.html",
+              "contact.html",
+              "privacy.html",
+              "terms.html",
+              "disclaimer.html"
+          ]
+
+
+          sitemap_urls = []
+
+
+          for static_file in static_pages:
+
+              if os.path.exists(static_file):
+
+                  if static_file == "index.html":
+
+                      sitemap_urls.append(
+                          SITE
+                      )
+
+                  else:
+
+                      sitemap_urls.append(
+                          SITE + static_file
+                      )
+
+
+          for item in existing_articles:
+
+              sitemap_urls.append(
+                  SITE + item["file"]
+              )
+
+
+          sitemap_urls.append(
+              article_url
+          )
+
+
+          sitemap_urls = list(
+              dict.fromkeys(
+                  sitemap_urls
+              )
+          )
+
+
+          sitemap = """<?xml version="1.0" encoding="UTF-8"?>
+          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+          """
+
+
+          for url_item in sitemap_urls:
+
+              sitemap += f"""
+          <url>
+              <loc>{html.escape(url_item)}</loc>
+              <lastmod>{today}</lastmod>
+          </url>
+          """
+
+
+          sitemap += """
+          </urlset>
+          """
+
+
+          with open(
+              "sitemap.xml",
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              f.write(sitemap)
+
+
+          # ============================================
+          # SUCCESS
+          # ============================================
+
+          print("")
+          print("======================================")
+          print("AI ARTICLE SUCCESSFULLY CREATED")
+          print("======================================")
+          print("Model:", MODEL)
+          print("Title:", title)
+          print("Words:", word_count)
+          print("File:", filename)
+          print("URL:", article_url)
+          print("Sitemap URLs:", len(sitemap_urls))
+          print("======================================")
+
+
           PY
+
+
+          python3 generate_article.py
+
+
+      # ============================================
+      # COMMIT AND PUSH
+      # ============================================
+
+      - name: Commit and push article
+
+        run: |
+
+          git config user.name "AIHindiHub AI"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add .
+
+          if git diff --cached --quiet; then
+
+            echo "No changes to commit."
+
+            exit 0
+
+          fi
+
+          git commit \
+            -m "AI: publish new Hindi SEO article"
+
+          git push  
