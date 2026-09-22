@@ -2,70 +2,88 @@
 
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
-<url>
-<loc>https://freeaimony.github.io/AiHindiHub/</loc>
-<lastmod>2026-08-02</lastmod>
-<changefreq>daily</changefreq>
-<priority>1.0</priority>
-</url>
+  <!-- Homepage -->
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
 
-<url>
-<loc>https://freeaimony.github.io/AiHindiHub/top-10-free-ai-tools.html</loc>
-<lastmod>2026-08-02</lastmod>
-<changefreq>weekly</changefreq>
-<priority>0.9</priority>
-</url>
+  <!-- Main Guides -->
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/top-10-free-ai-tools.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
 
-<url>
-<loc>https://freeaimony.github.io/AiHindiHub/how-to-earn-money-with-ai.html</loc>
-<lastmod>2026-08-02</lastmod>
-<changefreq>weekly</changefreq>
-<priority>0.9</priority>
-</url>
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/google-gemini-complete-guide.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
 
-<url>
-<loc>https://freeaimony.github.io/AiHindiHub/google-gemini-complete-guide.html</loc>
-<lastmod>2026-08-02</lastmod>
-<changefreq>weekly</changefreq>
-<priority>0.8</priority>
-</url>
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/how-to-earn-money-with-ai.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
 
-<url>
-<loc>https://freeaimony.github.io/AiHindiHub/best-ai-apps-for-students.html</loc>
-<lastmod>2026-08-02</lastmod>
-<changefreq>monthly</changefreq>
-<priority>0.8</priority>
-</url>
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/best-ai-apps-for-students.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
 
-<url>
-<loc>https://freeaimony.github.io/AiHindiHub/top-ai-image-generator-tools.html</loc>
-<lastmod>2026-08-02</lastmod>
-<changefreq>weekly</changefreq>
-<priority>0.8</priority>
-</url>
+  <!-- AI Guides -->
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/claude-ai-complete-guide.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 
+  <!-- Latest AI Articles -->
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/how-to-build-ai-second-brain-productivity-guide.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 
-<url>
-  <loc>https://freeaimony.github.io/AiHindiHub/what-are-ai-agents-complete-guide-hindi.html</loc>
-  <lastmod>2026-09-07</lastmod>
-</url>
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/autonomous-ai-agents-guide-hindi-2025.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/ai-tools-for-productivity-and-students-guide-hindi.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 
-<url>
-  <loc>https://freeaimony.github.io/AiHindiHub/ai-tools-for-productivity-and-students-guide-hindi.html</loc>
-  <lastmod>2026-09-07</lastmod>
-</url>
+  <!-- About -->
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/about.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
 
+  <!-- Legal Pages -->
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/privacy.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
 
-<url>
-  <loc>https://freeaimony.github.io/AiHindiHub/autonomous-ai-agents-guide-hindi-2025.html</loc>
-  <lastmod>2026-09-07</lastmod>
-</url>
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/terms.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
 
-
-<url>
-  <loc>https://freeaimony.github.io/AiHindiHub/how-to-build-ai-second-brain-productivity-guide.html</loc>
-  <lastmod>2026-09-07</lastmod>
-</url>
+  <url>
+    <loc>https://freeaimony.github.io/AiHindiHub/disclaimer.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
 
 </urlset>
